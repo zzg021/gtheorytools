@@ -1,0 +1,52 @@
+Package: gtheorytools
+Type: Package
+Title: Tools for Generalizability Theory
+Version: 0.1.0
+Authors@R:
+    c(
+        person(
+            given = "Zhigang", family = "Zhang",
+            email = "zhigaz@uw.edu",
+            role = c("aut", "cre")
+        ),
+        person(
+            given = "Yijun", family = "Cheng",
+            email = "chengxb@uw.edu",
+            role = "aut"
+        ),
+        person(
+            given = "Kefan", family = "Yu",
+            email = "ky285@uw.edu",
+            role = "aut"
+        ),
+        person(
+            given = "Zixie", family = "Zheng",
+            email = "zixiezh@uw.edu",
+            role = "aut"
+        ),
+        person(
+            given = "Min", family = "Li",
+            email = "minli@uw.edu",
+            role = "aut"
+        )
+    )
+Description: Estimates the variance components of one- and two-facet
+    generalizability (G) studies with crossed or nested designs, and computes
+    decision (D) studies with random, finite, or fixed facets. Reports standard
+    errors for variance components, error variances, and generalizability and
+    dependability coefficients. D studies can be compared across sample sizes
+    and selected by a minimum G or Phi value.
+License: GPL-3
+Encoding: UTF-8
+Depends:
+    R (>= 3.5.0)
+LazyData: true
+Imports:
+    lme4,
+    stats
+Roxygen: list(markdown = TRUE)
+NeedsCompilation: no
+Config/roxygen2/version: 8.1.1
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
