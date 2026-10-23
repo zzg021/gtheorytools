@@ -1,0 +1,8 @@
+# Local R session files
+.Rhistory
+.RData
+.Rproj.user/
+.DS_Store
+
+# Generated website; GitHub Actions builds and publishes it.
+/docs/

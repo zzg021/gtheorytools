@@ -1,0 +1,43 @@
+url: https://zigzag021.github.io/gtheorytools/
+
+template:
+  bootstrap: 5
+  bootswatch: pulse
+  math-rendering: katex
+
+home:
+  title: Generalizability theory in R
+  description: >
+    Estimate G-study variance components, plan D studies, and compare
+    generalizability and dependability coefficients with gtheorytools.
+
+navbar:
+  structure:
+    left: [get_started, reference]
+    right: [search, github]
+  components:
+    get_started:
+      text: Get started
+      href: index.html#quick-start
+
+reference:
+  - title: G studies
+    desc: Estimate variance components for crossed and nested designs.
+    contents:
+      - g_study
+  - title: D studies and study planning
+    desc: Compute coefficients, compare sample sizes, and select candidate designs.
+    contents:
+      - d_study
+      - compare_d_studies
+      - find_d_designs
+  - title: Example data
+    desc: Synthetic data sets from Brennan (2001).
+    contents:
+      - brennan_p_x_i
+      - brennan_i_in_p
+      - brennan_p_x_i_x_o
+      - brennan_p_x_r_in_t
+  - title: Package overview
+    contents:
+      - gtheorytools-package
