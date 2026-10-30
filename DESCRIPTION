@@ -37,9 +37,9 @@ Description: Estimates the variance components of one- and two-facet
     dependability coefficients. D studies can be compared across sample sizes
     and selected by a minimum G or Phi value.
 License: GPL-3
-URL: https://zigzag021.github.io/gtheorytools/,
-    https://github.com/Zigzag021/gtheorytools
-BugReports: https://github.com/Zigzag021/gtheorytools/issues
+URL: https://zzg021.github.io/gtheorytools/,
+    https://github.com/zzg021/gtheorytools
+BugReports: https://github.com/zzg021/gtheorytools/issues
 Encoding: UTF-8
 Depends:
     R (>= 3.5.0)

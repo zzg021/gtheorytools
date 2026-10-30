@@ -7,6 +7,15 @@ and uses them to plan decision (D) studies. It supports one- and two-facet
 designs with crossed or nested facets, including random, finite, and fixed
 facets, and reports standard errors for variance components and coefficients.
 
+## Installation
+
+The package is under development and is not yet on CRAN. Install it from GitHub:
+
+```r
+# install.packages("remotes")
+remotes::install_github("zzg021/gtheorytools")
+```
+
 ## Quick start
 
 Start with Brennan's (2001) person-by-item data. Every person responds to the
