@@ -148,16 +148,22 @@
   return(result)
 }
 
-# A fixed facet requires one non-missing score in every cell of a balanced
-# design. Brennan's (2001) Eq. 3.34, used below to report the components with
-# the facet fixed, rests on the expected mean squares of balanced designs, and
-# unequal numbers within a fixed facet make a multivariate design (Sec. 9.1).
-.check_fixed_facet_data <- function(dat_for_lmer, sample_sizes, fixed) {
+# One non-missing score in every cell, with the same number of nested
+# conditions in each level of their parent.
+.is_balanced <- function(dat_for_lmer, sample_sizes) {
   n_persons <- length(unique(dat_for_lmer$P))
   expected_rows <- n_persons * prod(sample_sizes)
+  result <- !anyNA(sample_sizes) && !anyNA(dat_for_lmer$score) &&
+    nrow(dat_for_lmer) == expected_rows
+  return(result)
+}
 
-  if (anyNA(sample_sizes) || anyNA(dat_for_lmer$score) ||
-      nrow(dat_for_lmer) != expected_rows) {
+# A fixed facet requires balanced data. Brennan's (2001) Eq. 3.34, used below
+# to report the components with the facet fixed, rests on the expected mean
+# squares of balanced designs, and unequal numbers within a fixed facet make a
+# multivariate design (Sec. 9.1).
+.check_fixed_facet_data <- function(dat_for_lmer, sample_sizes, fixed) {
+  if (!.is_balanced(dat_for_lmer, sample_sizes)) {
     stop(
       "fixed = \"", fixed, "\" requires complete, balanced data: one non-missing ",
       "score for every person in every condition, with the same number of nested ",
@@ -264,15 +270,18 @@
   return(result)
 }
 
-#' Generalizability (G) Study with a Linear Mixed Model
+#' Generalizability (G) Study
 #'
 #' Estimates the variance components of a one- or two-facet G study, with
-#' persons as the object of measurement, by fitting a random-intercept linear
-#' mixed model with [lme4::lmer()] (REML). Standard errors use the REML
-#' observed information.
+#' persons as the object of measurement. By default it fits a
+#' random-intercept linear mixed model with [lme4::lmer()] (REML), with
+#' standard errors from the REML observed information. For balanced data,
+#' `method = "anova"` gives the ANOVA estimates from the expected mean
+#' squares, with Brennan's (2001) standard errors.
 #'
 #' @param data A data frame in long format, with one row per score and no
-#'   replicated design cells. Missing scores are dropped when `fixed = NULL`.
+#'   replicated design cells. Missing scores are dropped when `fixed = NULL`
+#'   and `method = "reml"`.
 #' @param score_column Name of the score column.
 #' @param p Name of the person (object of measurement) column.
 #' @param f1,f2 Names of the facet columns. `f2 = NULL` gives a one-facet
@@ -284,6 +293,9 @@
 #' @param fixed Optional name of the `f1` or `f2` column of a facet fixed in
 #'   the universe of admissible observations. `fully_crossed` allows either
 #'   facet and `partially_nested` only `f1`. Requires complete, balanced data.
+#' @param method `"reml"` for a linear mixed model fitted by REML, or
+#'   `"anova"` for estimates from the expected mean squares, which requires
+#'   complete, balanced data (see Details).
 #'
 #' @details
 #' P, F1, and F2 correspond to the columns named by `p`, `f1`, and `f2`.
@@ -303,6 +315,18 @@
 #' D study. To fix a facet only in the D study, leave it random here and
 #' set its sample size equal to its universe size in [d_study()].
 #'
+#' With `method = "anova"`, the variance components solve the expected mean
+#' square equations of the random effects model (Brennan, 2001, Eqs. 3.24 and
+#' 3.25). Their standard errors and covariance matrix follow Brennan's
+#' Eq. 6.1, which divides each squared mean square by its degrees of freedom
+#' plus 2, as GENOVA does. Estimates below zero are set to zero, leaving the
+#' other estimates unchanged (Sec. 3.4.6). With `fixed`, Eq. 3.34 is applied
+#' to the estimates before that step. For balanced data with no estimate
+#' below zero, the two methods give the same estimates, and the REML standard
+#' errors correspond to dividing by the degrees of freedom. They are larger
+#' by a factor of up to sqrt((df + 2) / df), sqrt(2) for a facet with three
+#' levels.
+#'
 #' @returns An object of class `g_study`, a list with the following elements:
 #' \describe{
 #'   \item{\code{variance_components}}{A data frame of reported variance
@@ -312,6 +336,13 @@
 #'   \item{\code{variance_component}, \code{variance_component_se},
 #'     \code{variance_component_vcov}}{The fitted variance components,
 #'     their standard errors, and the covariance matrix used by [d_study()].}
+#'   \item{\code{method}}{The estimation method.}
+#'   \item{\code{anova_table}}{With `method = "anova"`, a data frame of
+#'     degrees of freedom, sums of squares, mean squares, and the random
+#'     effects estimates before those below zero are set to zero.}
+#'   \item{\code{ems_coefficients}}{With `method = "anova"`, the matrix whose
+#'     row alpha and column beta give the coefficient of sigma^2(beta) in the
+#'     expected mean square of alpha.}
 #'   \item{\code{fit}}{The fitted `lmer` model.}
 #'   \item{\code{fit_diagnostics}}{Singularity and convergence information,
 #'     with messages and warnings from `lmer`.}
@@ -319,6 +350,7 @@
 #'     \code{formula}, \code{n_facets}, \code{facet_columns},
 #'     \code{fixed_facet}, and \code{sample_sizes}.}
 #' }
+#' Elements that do not apply to the method are `NULL`.
 #'
 #' @references
 #' Brennan, R. L. (2001). *Generalizability theory*. Springer.
@@ -347,41 +379,84 @@
 #'   fixed = "t"
 #' )
 #'
+#' # ANOVA estimates, with GENOVA's standard errors (Appendix F).
+#' g_study(
+#'   brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested",
+#'   method = "anova"
+#' )
+#'
 #' @export
 g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
-                    fixed = NULL) {
+                    fixed = NULL, method = c("reml", "anova")) {
+  method <- match.arg(method)
   design <- .build_g_study_design(score_column, p, f1, f2, design)
   fixed_facet <- .resolve_fixed_facet(fixed, design)
   dat_for_lmer <- .prepare_g_study_data(data, design)
   sample_sizes <- .g_study_sample_sizes(dat_for_lmer, design)
   effect_names <- c(design$random_effects, design$residual_effect)
+  effect_labels <- vapply(
+    effect_names,
+    .effect_label,
+    character(1),
+    facet_columns = design$facet_columns,
+    USE.NAMES = FALSE
+  )
 
-  # A facet fixed in the G study enters the model as a fixed effect; its
-  # interactions and the effects nested in it stay random.
+  # A facet fixed in the G study has no variance component for its main
+  # effect, which REML fits as a fixed effect; its interactions and the
+  # effects nested in it stay random.
   if (!is.null(fixed_facet)) {
     .check_fixed_facet_data(dat_for_lmer, sample_sizes, fixed)
     design$random_effects <- setdiff(design$random_effects, fixed_facet)
   }
+  fitted_effects <- c(design$random_effects, design$residual_effect)
 
-  formula <- .lmer_formula("score", design$random_effects, fixed_facet)
-  fit_result <- .fit_lmer_with_diagnostics(formula, dat_for_lmer)
-  fit <- fit_result$fit
-  fit_diagnostics <- fit_result$diagnostics
+  formula <- NULL
+  fit <- NULL
+  fit_diagnostics <- NULL
+  anova_table <- NULL
+  ems_coefficients <- NULL
+  if (method == "reml") {
+    formula <- .lmer_formula("score", design$random_effects, fixed_facet)
+    fit_result <- .fit_lmer_with_diagnostics(formula, dat_for_lmer)
+    fit <- fit_result$fit
+    fit_diagnostics <- fit_result$diagnostics
+    components <- .extract_variance_components(fit, design)
+  } else {
+    .check_anova_data(dat_for_lmer, sample_sizes)
+    anova <- .anova_table(dat_for_lmer, effect_names)
+    estimates <- .anova_components(anova, nrow(dat_for_lmer))
+    components <- list(
+      vc = estimates$vc[fitted_effects],
+      se = estimates$se[fitted_effects],
+      vcov = estimates$vcov[fitted_effects, fitted_effects, drop = FALSE]
+    )
+    anova_table <- data.frame(
+      effect = effect_names,
+      effect_label = effect_labels,
+      anova$table[c("df", "sum_of_squares", "mean_square")],
+      estimate = unname(estimates$vc[effect_names]),
+      row.names = NULL
+    )
+    ems_coefficients <- estimates$ems_coefficients
+  }
 
-  components <- .extract_variance_components(fit, design)
   reported <- components
   if (!is.null(fixed_facet)) {
     reported <- .mixed_model_components(components, fixed_facet, sample_sizes[[fixed_facet]])
   }
 
+  # ANOVA estimates below zero are set to zero after Eq. 3.34, which uses them
+  # as computed (Brennan 2001, pp. 84 and 90). Their standard errors are those
+  # of the estimates as computed.
+  if (method == "anova") {
+    components$vc <- pmax(components$vc, 0)
+    reported$vc <- pmax(reported$vc, 0)
+  }
+
   vc_table <- data.frame(
     effect = effect_names,
-    effect_label = vapply(
-      effect_names,
-      .effect_label,
-      character(1),
-      facet_columns = design$facet_columns
-    ),
+    effect_label = effect_labels,
     variance_estimate = unname(reported$vc[effect_names]),
     standard_error = unname(reported$se[effect_names]),
     row.names = NULL
@@ -395,6 +470,9 @@ g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
     variance_component = components$vc,
     variance_component_se = components$se,
     variance_component_vcov = components$vcov,
+    method = method,
+    anova_table = anova_table,
+    ems_coefficients = ems_coefficients,
     design_label = design$label,
     formula = formula,
     g_design = design$g_design,
@@ -414,8 +492,17 @@ print.g_study <- function(x, ..., digits = 7) {
   cat("========================================================\n")
   cat(x$design_label, "\n", sep = "")
   cat("========================================================\n\n")
-  cat("Model formula:\n")
-  cat(paste(deparse(x$formula, width.cutoff = 500), collapse = "\n"), "\n", sep = "")
+  if (x$method == "reml") {
+    cat("Model formula:\n")
+    cat(paste(deparse(x$formula, width.cutoff = 500), collapse = "\n"), "\n", sep = "")
+  } else {
+    cat("ANOVA table:\n")
+    print(x$anova_table, digits = digits, row.names = FALSE)
+    cat("\n")
+    effect_labels <- x$anova_table$effect_label
+    names(effect_labels) <- x$anova_table$effect
+    .print_expected_mean_squares(x$ems_coefficients, effect_labels)
+  }
   cat("\n")
   if (is.null(x$fixed_facet)) {
     cat("G-study variance components:\n")
@@ -434,6 +521,15 @@ print.g_study <- function(x, ..., digits = 7) {
       sep = ""
     )
   }
-  .print_lmer_fit_diagnostics(x$fit_diagnostics)
+  if (x$method == "reml") {
+    .print_lmer_fit_diagnostics(x$fit_diagnostics)
+  } else {
+    random_rows <- !(x$anova_table$effect %in% x$fixed_facet)
+    if (any(x$anova_table$estimate[random_rows] < 0)) {
+      cat(
+        "Estimates below zero are set to zero; the ANOVA table gives them as computed.\n"
+      )
+    }
+  }
   return(invisible(x))
 }

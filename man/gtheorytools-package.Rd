@@ -7,11 +7,12 @@
 \title{gtheorytools: Tools for Generalizability Theory}
 \description{
 Estimates variance components for one- and two-facet G studies with crossed
-or nested designs, and computes D studies with random, finite, or fixed
-facets. Reports standard errors, compares D studies across sample sizes,
-and selects designs that meet a target coefficient.
+or nested designs, by REML or from the ANOVA expected mean squares, and
+computes D studies with random, finite, or fixed facets. Reports standard
+errors, compares D studies across sample sizes, and selects designs that
+meet a target coefficient.
 \itemize{
-\item \code{\link[=g_study]{g_study()}} fits a one- or two-facet G study.
+\item \code{\link[=g_study]{g_study()}} estimates a one- or two-facet G study.
 \item \code{\link[=d_study]{d_study()}} computes a D study for one set of sample sizes.
 \item \code{\link[=compare_d_studies]{compare_d_studies()}} compares D studies across combinations of facet sample sizes.
 \item \code{\link[=find_d_designs]{find_d_designs()}} selects D studies that meet a G or Phi target.
@@ -23,6 +24,15 @@ Brennan, R. L. (2001). \emph{Generalizability theory}. Springer.
 Bates, D., Mächler, M., Bolker, B., & Walker, S. (2015). Fitting linear
 mixed-effects models using lme4. \emph{Journal of Statistical Software},
 \emph{67}(1), 1--48. \doi{10.18637/jss.v067.i01}
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://zzg021.github.io/gtheorytools/}
+  \item \url{https://github.com/zzg021/gtheorytools}
+  \item Report bugs at \url{https://github.com/zzg021/gtheorytools/issues}
+}
+
 }
 \author{
 \strong{Maintainer}: Zhigang Zhang \email{zhigaz@uw.edu}

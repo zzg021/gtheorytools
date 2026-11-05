@@ -31,7 +31,9 @@ Authors@R:
         )
     )
 Description: Estimates the variance components of one- and two-facet
-    generalizability (G) studies with crossed or nested designs, and computes
+    generalizability (G) studies with crossed or nested designs, by
+    restricted maximum likelihood or, for balanced data, from the analysis of
+    variance expected mean squares, and computes
     decision (D) studies with random, finite, or fixed facets. Reports standard
     errors for variance components, error variances, and generalizability and
     dependability coefficients. D studies can be compared across sample sizes

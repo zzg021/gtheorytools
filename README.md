@@ -86,7 +86,10 @@ person and facets, and no replicated design cells. The score column is named
 | Two | `"partially_nested"` | `f2` nested within `f1`, crossed with persons |
 | Two | `"fully_nested"` | `f2` nested within `f1`, nested within persons |
 
-`g_study()` fits linear mixed models by REML. A facet can be fixed in the
+`g_study()` fits linear mixed models by REML. For complete, balanced data,
+`method = "anova"` gives the ANOVA estimates from the expected mean squares,
+with the standard errors and covariance matrix that GENOVA reports
+(Brennan, 2001, Eq. 6.1). A facet can be fixed in the
 G study for supported two-facet designs using `fixed`; this requires complete,
 balanced data. In a D study, `universe_sizes` and `d_sizes` specify random,
 finite, or fixed facets. D studies can also use a more nested design than

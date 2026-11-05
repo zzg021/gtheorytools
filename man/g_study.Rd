@@ -2,13 +2,23 @@
 % Please edit documentation in R/g-study.R
 \name{g_study}
 \alias{g_study}
-\title{Generalizability (G) Study with a Linear Mixed Model}
+\title{Generalizability (G) Study}
 \usage{
-g_study(data, score_column = "score", p, f1, f2 = NULL, design, fixed = NULL)
+g_study(
+  data,
+  score_column = "score",
+  p,
+  f1,
+  f2 = NULL,
+  design,
+  fixed = NULL,
+  method = c("reml", "anova")
+)
 }
 \arguments{
 \item{data}{A data frame in long format, with one row per score and no
-replicated design cells. Missing scores are dropped when \code{fixed = NULL}.}
+replicated design cells. Missing scores are dropped when \code{fixed = NULL}
+and \code{method = "reml"}.}
 
 \item{score_column}{Name of the score column.}
 
@@ -25,6 +35,10 @@ facets (see Details).}
 \item{fixed}{Optional name of the \code{f1} or \code{f2} column of a facet fixed in
 the universe of admissible observations. \code{fully_crossed} allows either
 facet and \code{partially_nested} only \code{f1}. Requires complete, balanced data.}
+
+\item{method}{\code{"reml"} for a linear mixed model fitted by REML, or
+\code{"anova"} for estimates from the expected mean squares, which requires
+complete, balanced data (see Details).}
 }
 \value{
 An object of class \code{g_study}, a list with the following elements:
@@ -36,6 +50,13 @@ with that facet fixed; the fixed facet's main-effect row is \code{NA}.}
 \item{\code{variance_component}, \code{variance_component_se},
 \code{variance_component_vcov}}{The fitted variance components,
 their standard errors, and the covariance matrix used by \code{\link[=d_study]{d_study()}}.}
+\item{\code{method}}{The estimation method.}
+\item{\code{anova_table}}{With \code{method = "anova"}, a data frame of
+degrees of freedom, sums of squares, mean squares, and the random
+effects estimates before those below zero are set to zero.}
+\item{\code{ems_coefficients}}{With \code{method = "anova"}, the matrix whose
+row alpha and column beta give the coefficient of sigma^2(beta) in the
+expected mean square of alpha.}
 \item{\code{fit}}{The fitted \code{lmer} model.}
 \item{\code{fit_diagnostics}}{Singularity and convergence information,
 with messages and warnings from \code{lmer}.}
@@ -43,12 +64,15 @@ with messages and warnings from \code{lmer}.}
 \code{formula}, \code{n_facets}, \code{facet_columns},
 \code{fixed_facet}, and \code{sample_sizes}.}
 }
+Elements that do not apply to the method are \code{NULL}.
 }
 \description{
 Estimates the variance components of a one- or two-facet G study, with
-persons as the object of measurement, by fitting a random-intercept linear
-mixed model with \code{\link[lme4:lmer]{lme4::lmer()}} (REML). Standard errors use the REML
-observed information.
+persons as the object of measurement. By default it fits a
+random-intercept linear mixed model with \code{\link[lme4:lmer]{lme4::lmer()}} (REML), with
+standard errors from the REML observed information. For balanced data,
+\code{method = "anova"} gives the ANOVA estimates from the expected mean
+squares, with Brennan's (2001) standard errors.
 }
 \details{
 P, F1, and F2 correspond to the columns named by \code{p}, \code{f1}, and \code{f2}.
@@ -67,6 +91,18 @@ combines the highest-order interaction and error.\tabular{lll}{
 A facet declared with \code{fixed} keeps its observed conditions in every
 D study. To fix a facet only in the D study, leave it random here and
 set its sample size equal to its universe size in \code{\link[=d_study]{d_study()}}.
+
+With \code{method = "anova"}, the variance components solve the expected mean
+square equations of the random effects model (Brennan, 2001, Eqs. 3.24 and
+3.25). Their standard errors and covariance matrix follow Brennan's
+Eq. 6.1, which divides each squared mean square by its degrees of freedom
+plus 2, as GENOVA does. Estimates below zero are set to zero, leaving the
+other estimates unchanged (Sec. 3.4.6). With \code{fixed}, Eq. 3.34 is applied
+to the estimates before that step. For balanced data with no estimate
+below zero, the two methods give the same estimates, and the REML standard
+errors correspond to dividing by the degrees of freedom. They are larger
+by a factor of up to sqrt((df + 2) / df), sqrt(2) for a facet with three
+levels.
 }
 \examples{
 # p x i (Brennan, 2001, Table 2.3).
@@ -86,6 +122,12 @@ g_study(brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nes
 g_study(
   brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested",
   fixed = "t"
+)
+
+# ANOVA estimates, with GENOVA's standard errors (Appendix F).
+g_study(
+  brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested",
+  method = "anova"
 )
 
 }

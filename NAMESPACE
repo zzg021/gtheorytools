@@ -10,6 +10,7 @@ export(find_d_designs)
 export(g_study)
 importFrom(stats,
   as.formula,
+  ave,
   formula,
   model.frame,
   optimHess,
