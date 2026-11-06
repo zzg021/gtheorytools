@@ -24,12 +24,11 @@ all combinations (F1 varies fastest), a data frame with one combination
 per row, or a named numeric vector for one D study.}
 
 \item{d_design}{The D-study design, one of the \code{design} values of
-\code{\link[=g_study]{g_study()}}. Defaults to the G-study design; it may be more nested but
-not less.}
+\code{\link[=g_study]{g_study()}}. Defaults to the G-study design and may be more nested.}
 
 \item{d_nesting}{\code{"F2:F1"} or \code{"F1:F2"}, required when a fully crossed
-G study is recoded to a nested design. A nested G study fixes it as
-\code{"F2:F1"}.}
+G study is recoded to a nested design. It is \code{"F2:F1"} for a nested
+G study.}
 }
 \value{
 An object of class \code{d_study_comparison}, a list with the following
@@ -38,8 +37,9 @@ elements:
 \item{\code{scenarios}}{A data frame with one row per D study. Columns
 contain the row number (\code{scenario}), facet sample sizes, estimates of
 \code{tau}, \code{delta}, \code{Delta}, \code{G}, and \code{Phi}, their \code{se_} columns,
-\code{se_available}, \code{status}, \code{warning}, and \code{error}. See \code{\link[=d_study]{d_study()}} for
-the definitions of the variances and coefficients.}
+\code{se_available}, and \code{status} (\code{"ok"}, \code{"warning"}, or \code{"error"}) with
+the \code{warning} and \code{error} messages. See \code{\link[=d_study]{d_study()}} for the
+definitions of the variances and coefficients.}
 \item{Design information}{\code{g_design}, \code{d_design},
 \code{d_nesting}, \code{universe_sizes},
 \code{facet_columns}, and \code{fixed_facet}, which apply to all rows.}
@@ -48,10 +48,6 @@ the definitions of the variances and coefficients.}
 \description{
 Evaluates combinations of facet sample sizes from one G study,
 with one D-study design and one set of universe sizes.
-}
-\details{
-Errors and warnings for individual D studies are recorded in \code{scenarios}.
-An invalid design or set of universe sizes stops the call.
 }
 \examples{
 # p x I x O: 4, 8, or 16 items on 1 or 2 occasions (Brennan, 2001,

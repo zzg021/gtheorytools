@@ -231,11 +231,10 @@
 #'   `universe_sizes`, with `1 <= n' <= N'`. For a nested facet, n' is the
 #'   number of conditions in each level of its parent.
 #' @param d_design The D-study design, one of the `design` values of
-#'   [g_study()]. Defaults to the G-study design; it may be more nested but
-#'   not less.
+#'   [g_study()]. Defaults to the G-study design and may be more nested.
 #' @param d_nesting `"F2:F1"` or `"F1:F2"`, required when a fully crossed
-#'   G study is recoded to a nested design. A nested G study fixes it as
-#'   `"F2:F1"`.
+#'   G study is recoded to a nested design. It is `"F2:F1"` for a nested
+#'   G study.
 #'
 #' @details
 #' The output labels `tau`, `delta`, and `Delta` denote universe-score

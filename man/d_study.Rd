@@ -24,12 +24,11 @@ G study may be omitted.}
 number of conditions in each level of its parent.}
 
 \item{d_design}{The D-study design, one of the \code{design} values of
-\code{\link[=g_study]{g_study()}}. Defaults to the G-study design; it may be more nested but
-not less.}
+\code{\link[=g_study]{g_study()}}. Defaults to the G-study design and may be more nested.}
 
 \item{d_nesting}{\code{"F2:F1"} or \code{"F1:F2"}, required when a fully crossed
-G study is recoded to a nested design. A nested G study fixes it as
-\code{"F2:F1"}.}
+G study is recoded to a nested design. It is \code{"F2:F1"} for a nested
+G study.}
 }
 \value{
 An object of class \code{d_study}, a list with the following elements:

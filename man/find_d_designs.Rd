@@ -9,8 +9,7 @@ find_d_designs(comparison, coefficient, target)
 \arguments{
 \item{comparison}{The object returned by \code{\link[=compare_d_studies]{compare_d_studies()}}.}
 
-\item{coefficient}{\code{"G"} for relative decisions or \code{"Phi"} for absolute
-decisions. See \code{\link[=d_study]{d_study()}} for the coefficient definitions.}
+\item{coefficient}{\code{"G"} or \code{"Phi"} (see \code{\link[=d_study]{d_study()}}).}
 
 \item{target}{A number between 0 and 1. An estimate equal to the target up
 to rounding error, \code{sqrt(.Machine$double.eps)}, qualifies.}
@@ -23,16 +22,14 @@ elements:
 target, in their original order.}
 \item{\code{coefficient}}{The selected coefficient, \code{"G"} or \code{"Phi"}.}
 \item{\code{target}}{The minimum coefficient value.}
-\item{\code{meets_target}}{One logical value per D study: \code{TRUE} when
-the target is met, \code{FALSE} when the estimate is below the target,
-and \code{NA} when the selected coefficient has no finite estimate.
-Comparisons allow for the rounding tolerance described above.}
+\item{\code{meets_target}}{Whether each D study meets the target; \code{NA}
+when the coefficient has no finite estimate.}
 \item{\code{comparison}}{The input comparison object.}
 }
 }
 \description{
 Returns the D studies in \code{comparison} whose estimated G or Phi is at
-least \code{target}. Selection uses point estimates.
+least \code{target}.
 }
 \examples{
 # p x (R:T) designs with at most 12 ratings per person (Brennan, 2001,

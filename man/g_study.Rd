@@ -25,8 +25,7 @@ and \code{method = "reml"}.}
 \item{p}{Name of the person (object of measurement) column.}
 
 \item{f1, f2}{Names of the facet columns. \code{f2 = NULL} gives a one-facet
-design. In the nested designs \code{f2} is nested within \code{f1}; swap the
-columns for the other order.}
+design. In the nested designs \code{f2} is nested within \code{f1}.}
 
 \item{design}{One of \code{"crossed"} or \code{"nested"} for one facet, and
 \code{"fully_crossed"}, \code{"partially_nested"}, or \code{"fully_nested"} for two
@@ -36,9 +35,10 @@ facets (see Details).}
 the universe of admissible observations. \code{fully_crossed} allows either
 facet and \code{partially_nested} only \code{f1}. Requires complete, balanced data.}
 
-\item{method}{\code{"reml"} for a linear mixed model fitted by REML, or
-\code{"anova"} for estimates from the expected mean squares, which requires
-complete, balanced data (see Details).}
+\item{method}{\code{"reml"} for a random-intercept linear mixed model fitted by
+REML, with standard errors from the observed information, or \code{"anova"}
+for estimates from the expected mean squares, which requires complete,
+balanced data (see Details).}
 }
 \value{
 An object of class \code{g_study}, a list with the following elements:
@@ -68,11 +68,8 @@ Elements that do not apply to the method are \code{NULL}.
 }
 \description{
 Estimates the variance components of a one- or two-facet G study, with
-persons as the object of measurement. By default it fits a
-random-intercept linear mixed model with \code{\link[lme4:lmer]{lme4::lmer()}} (REML), with
-standard errors from the REML observed information. For balanced data,
-\code{method = "anova"} gives the ANOVA estimates from the expected mean
-squares, with Brennan's (2001) standard errors.
+persons as the object of measurement, by REML with \code{\link[lme4:lmer]{lme4::lmer()}} or from
+the ANOVA expected mean squares.
 }
 \details{
 P, F1, and F2 correspond to the columns named by \code{p}, \code{f1}, and \code{f2}.
@@ -99,10 +96,9 @@ Eq. 6.1, which divides each squared mean square by its degrees of freedom
 plus 2, as GENOVA does. Estimates below zero are set to zero, leaving the
 other estimates unchanged (Sec. 3.4.6). With \code{fixed}, Eq. 3.34 is applied
 to the estimates before that step. For balanced data with no estimate
-below zero, the two methods give the same estimates, and the REML standard
-errors correspond to dividing by the degrees of freedom. They are larger
-by a factor of up to sqrt((df + 2) / df), sqrt(2) for a facet with three
-levels.
+below zero, the two methods give the same estimates; the REML standard
+errors correspond to dividing by df rather than df + 2, so they are larger
+by a factor of up to sqrt((df + 2) / df).
 }
 \examples{
 # p x i (Brennan, 2001, Table 2.3).
@@ -135,7 +131,5 @@ g_study(
 Brennan, R. L. (2001). \emph{Generalizability theory}. Springer.
 }
 \seealso{
-\code{\link[=d_study]{d_study()}}, \code{\link[=compare_d_studies]{compare_d_studies()}}, and the example data
-\link{brennan_p_x_i}, \link{brennan_i_in_p}, \link{brennan_p_x_i_x_o}, and
-\link{brennan_p_x_r_in_t}.
+\code{\link[=d_study]{d_study()}}
 }

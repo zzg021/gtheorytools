@@ -44,18 +44,15 @@
 #'   all combinations (F1 varies fastest), a data frame with one combination
 #'   per row, or a named numeric vector for one D study.
 #'
-#' @details
-#' Errors and warnings for individual D studies are recorded in `scenarios`.
-#' An invalid design or set of universe sizes stops the call.
-#'
 #' @returns An object of class `d_study_comparison`, a list with the following
 #'   elements:
 #' \describe{
 #'   \item{\code{scenarios}}{A data frame with one row per D study. Columns
 #'     contain the row number (`scenario`), facet sample sizes, estimates of
 #'     `tau`, `delta`, `Delta`, `G`, and `Phi`, their `se_` columns,
-#'     `se_available`, `status`, `warning`, and `error`. See [d_study()] for
-#'     the definitions of the variances and coefficients.}
+#'     `se_available`, and `status` (`"ok"`, `"warning"`, or `"error"`) with
+#'     the `warning` and `error` messages. See [d_study()] for the
+#'     definitions of the variances and coefficients.}
 #'   \item{Design information}{\code{g_design}, \code{d_design},
 #'     \code{d_nesting}, \code{universe_sizes},
 #'     \code{facet_columns}, and \code{fixed_facet}, which apply to all rows.}
@@ -191,11 +188,10 @@ print.d_study_comparison <- function(x, ..., digits = 7, row.names = FALSE) {
 #' Select D Studies That Meet a Coefficient Target
 #'
 #' Returns the D studies in `comparison` whose estimated G or Phi is at
-#' least `target`. Selection uses point estimates.
+#' least `target`.
 #'
 #' @param comparison The object returned by [compare_d_studies()].
-#' @param coefficient `"G"` for relative decisions or `"Phi"` for absolute
-#'   decisions. See [d_study()] for the coefficient definitions.
+#' @param coefficient `"G"` or `"Phi"` (see [d_study()]).
 #' @param target A number between 0 and 1. An estimate equal to the target up
 #'   to rounding error, `sqrt(.Machine$double.eps)`, qualifies.
 #'
@@ -206,10 +202,8 @@ print.d_study_comparison <- function(x, ..., digits = 7, row.names = FALSE) {
 #'     target, in their original order.}
 #'   \item{\code{coefficient}}{The selected coefficient, `"G"` or `"Phi"`.}
 #'   \item{\code{target}}{The minimum coefficient value.}
-#'   \item{\code{meets_target}}{One logical value per D study: `TRUE` when
-#'     the target is met, `FALSE` when the estimate is below the target,
-#'     and `NA` when the selected coefficient has no finite estimate.
-#'     Comparisons allow for the rounding tolerance described above.}
+#'   \item{\code{meets_target}}{Whether each D study meets the target; `NA`
+#'     when the coefficient has no finite estimate.}
 #'   \item{\code{comparison}}{The input comparison object.}
 #' }
 #'

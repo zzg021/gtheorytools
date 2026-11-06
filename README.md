@@ -9,7 +9,7 @@ facets, and reports standard errors for variance components and coefficients.
 
 ## Installation
 
-The package is under development and is not yet on CRAN. Install it from GitHub:
+Install the development version from GitHub:
 
 ```r
 # install.packages("remotes")
@@ -69,9 +69,6 @@ selection <- find_d_designs(comparison, coefficient = "G", target = 0.80)
 selection$designs
 ```
 
-Selection uses point estimates. Each comparison also reports standard errors
-and any warnings or errors for the candidate D studies.
-
 ## Supported designs
 
 Supply data in long format with one row per score, columns identifying the
@@ -89,17 +86,14 @@ person and facets, and no replicated design cells. The score column is named
 `g_study()` fits linear mixed models by REML. For complete, balanced data,
 `method = "anova"` gives the ANOVA estimates from the expected mean squares,
 with the standard errors and covariance matrix that GENOVA reports
-(Brennan, 2001, Eq. 6.1). A facet can be fixed in the
-G study for supported two-facet designs using `fixed`; this requires complete,
-balanced data. In a D study, `universe_sizes` and `d_sizes` specify random,
-finite, or fixed facets. D studies can also use a more nested design than
-the G study. See `g_study()` and `d_study()` for the supported combinations
-and definitions.
+(Brennan, 2001, Eq. 6.1), and `fixed` fixes a facet of a fully crossed or
+partially nested G study. In a D study, `universe_sizes` and `d_sizes`
+specify random, finite, or fixed facets, and `d_design` can be more nested
+than the G-study design.
 
 ## Example data
 
-Four synthetic data sets from Brennan (2001) are included. Their help pages
-describe the variables and give examples.
+Four synthetic data sets from Brennan (2001) are included.
 
 | Data set | Design | Source |
 |:--|:--|:--|
@@ -107,12 +101,6 @@ describe the variables and give examples.
 | `brennan_i_in_p` | Items nested within persons | Table 2.9 |
 | `brennan_p_x_i_x_o` | Persons crossed with items and occasions | Table 3.3 |
 | `brennan_p_x_r_in_t` | Raters nested within tasks, crossed with persons | Table 3.4 |
-
-## Learn more
-
-The function reference includes arguments, returned values, and worked
-examples for `g_study()`, `d_study()`, `compare_d_studies()`, and
-`find_d_designs()`. In R, use `?g_study` to open the corresponding help page.
 
 ## References
 

@@ -21,9 +21,8 @@ Table 2.8.
 brennan_i_in_p
 }
 \description{
-Scores from 0 to 9 of 10 persons on 8 items each, an i:p design in which
-every person takes a different set of items (Brennan, 2001, Table 2.8).
-Brennan's G and D studies are in Table 2.9. The scores are those of
+Scores from 0 to 9 of 10 persons on 8 items each, an i:p design.
+Brennan's (2001) G and D studies are in Table 2.9. The scores are those of
 \link{brennan_p_x_i_x_o}, with items 1-4 on occasion 1 and items 5-8 on
 occasion 2.
 }
@@ -31,6 +30,6 @@ occasion 2.
 head(brennan_i_in_p)
 }
 \seealso{
-\code{\link[=g_study]{g_study()}} with \code{design = "nested"}.
+\code{\link[=g_study]{g_study()}}
 }
 \keyword{datasets}

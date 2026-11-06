@@ -38,6 +38,3 @@ reference:
       - brennan_i_in_p
       - brennan_p_x_i_x_o
       - brennan_p_x_r_in_t
-  - title: Package overview
-    contents:
-      - gtheorytools-package

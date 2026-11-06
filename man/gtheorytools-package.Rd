@@ -6,11 +6,9 @@
 \alias{gtheorytools-package}
 \title{gtheorytools: Tools for Generalizability Theory}
 \description{
-Estimates variance components for one- and two-facet G studies with crossed
-or nested designs, by REML or from the ANOVA expected mean squares, and
-computes D studies with random, finite, or fixed facets. Reports standard
-errors, compares D studies across sample sizes, and selects designs that
-meet a target coefficient.
+Estimates the variance components of one- and two-facet generalizability (G) studies with crossed or nested designs, by restricted maximum likelihood or, for balanced data, from the analysis of variance expected mean squares. Computes decision (D) studies with random, finite, or fixed facets. Reports standard errors for variance components, error variances, and generalizability and dependability coefficients. D studies can be compared across sample sizes and selected by a minimum G or Phi value.
+}
+\details{
 \itemize{
 \item \code{\link[=g_study]{g_study()}} estimates a one- or two-facet G study.
 \item \code{\link[=d_study]{d_study()}} computes a D study for one set of sample sizes.
@@ -26,13 +24,7 @@ mixed-effects models using lme4. \emph{Journal of Statistical Software},
 \emph{67}(1), 1--48. \doi{10.18637/jss.v067.i01}
 }
 \seealso{
-Useful links:
-\itemize{
-  \item \url{https://zzg021.github.io/gtheorytools/}
-  \item \url{https://github.com/zzg021/gtheorytools}
-  \item Report bugs at \url{https://github.com/zzg021/gtheorytools/issues}
-}
-
+\url{https://zzg021.github.io/gtheorytools/}
 }
 \author{
 \strong{Maintainer}: Zhigang Zhang \email{zhigaz@uw.edu}

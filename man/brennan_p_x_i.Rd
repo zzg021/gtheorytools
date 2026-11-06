@@ -20,14 +20,13 @@ Table 2.2.
 brennan_p_x_i
 }
 \description{
-Dichotomous scores of 10 persons on 12 items, a p x i design (Brennan,
-2001, Table 2.2). Brennan's G study is in Table 2.3 and his D studies in
-Table 2.4.
+Dichotomous scores of 10 persons on 12 items, a p x i design. Brennan's
+(2001) G study is in Table 2.3 and his D studies in Table 2.4.
 }
 \examples{
 head(brennan_p_x_i)
 }
 \seealso{
-\code{\link[=g_study]{g_study()}} with \code{design = "crossed"}.
+\code{\link[=g_study]{g_study()}}
 }
 \keyword{datasets}

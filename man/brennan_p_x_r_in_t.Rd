@@ -23,14 +23,14 @@ brennan_p_x_r_in_t
 }
 \description{
 Ratings of 10 persons on 3 tasks, each task scored by its own 4 raters, a
-p x (r:t) design (Brennan, 2001, Table 3.2). Brennan's G study is in
-Table 3.4 and his D studies in Tables 4.6 (random model) and 4.8 (random
-model and tasks fixed). Appendix F gives the GENOVA run with tasks fixed.
+p x (r:t) design. Brennan's (2001) G study is in Table 3.4 and his
+D studies in Tables 4.6 (random model) and 4.8 (random model and tasks
+fixed). Appendix F gives the GENOVA run with tasks fixed.
 }
 \examples{
 head(brennan_p_x_r_in_t)
 }
 \seealso{
-\code{\link[=g_study]{g_study()}} with \code{design = "partially_nested"}.
+\code{\link[=g_study]{g_study()}}
 }
 \keyword{datasets}

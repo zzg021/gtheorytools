@@ -273,11 +273,8 @@
 #' Generalizability (G) Study
 #'
 #' Estimates the variance components of a one- or two-facet G study, with
-#' persons as the object of measurement. By default it fits a
-#' random-intercept linear mixed model with [lme4::lmer()] (REML), with
-#' standard errors from the REML observed information. For balanced data,
-#' `method = "anova"` gives the ANOVA estimates from the expected mean
-#' squares, with Brennan's (2001) standard errors.
+#' persons as the object of measurement, by REML with [lme4::lmer()] or from
+#' the ANOVA expected mean squares.
 #'
 #' @param data A data frame in long format, with one row per score and no
 #'   replicated design cells. Missing scores are dropped when `fixed = NULL`
@@ -285,17 +282,17 @@
 #' @param score_column Name of the score column.
 #' @param p Name of the person (object of measurement) column.
 #' @param f1,f2 Names of the facet columns. `f2 = NULL` gives a one-facet
-#'   design. In the nested designs `f2` is nested within `f1`; swap the
-#'   columns for the other order.
+#'   design. In the nested designs `f2` is nested within `f1`.
 #' @param design One of `"crossed"` or `"nested"` for one facet, and
 #'   `"fully_crossed"`, `"partially_nested"`, or `"fully_nested"` for two
 #'   facets (see Details).
 #' @param fixed Optional name of the `f1` or `f2` column of a facet fixed in
 #'   the universe of admissible observations. `fully_crossed` allows either
 #'   facet and `partially_nested` only `f1`. Requires complete, balanced data.
-#' @param method `"reml"` for a linear mixed model fitted by REML, or
-#'   `"anova"` for estimates from the expected mean squares, which requires
-#'   complete, balanced data (see Details).
+#' @param method `"reml"` for a random-intercept linear mixed model fitted by
+#'   REML, with standard errors from the observed information, or `"anova"`
+#'   for estimates from the expected mean squares, which requires complete,
+#'   balanced data (see Details).
 #'
 #' @details
 #' P, F1, and F2 correspond to the columns named by `p`, `f1`, and `f2`.
@@ -322,10 +319,9 @@
 #' plus 2, as GENOVA does. Estimates below zero are set to zero, leaving the
 #' other estimates unchanged (Sec. 3.4.6). With `fixed`, Eq. 3.34 is applied
 #' to the estimates before that step. For balanced data with no estimate
-#' below zero, the two methods give the same estimates, and the REML standard
-#' errors correspond to dividing by the degrees of freedom. They are larger
-#' by a factor of up to sqrt((df + 2) / df), sqrt(2) for a facet with three
-#' levels.
+#' below zero, the two methods give the same estimates; the REML standard
+#' errors correspond to dividing by df rather than df + 2, so they are larger
+#' by a factor of up to sqrt((df + 2) / df).
 #'
 #' @returns An object of class `g_study`, a list with the following elements:
 #' \describe{
@@ -355,9 +351,7 @@
 #' @references
 #' Brennan, R. L. (2001). *Generalizability theory*. Springer.
 #'
-#' @seealso [d_study()], [compare_d_studies()], and the example data
-#'   [brennan_p_x_i], [brennan_i_in_p], [brennan_p_x_i_x_o], and
-#'   [brennan_p_x_r_in_t].
+#' @seealso [d_study()]
 #'
 #' @examples
 #' # p x i (Brennan, 2001, Table 2.3).
