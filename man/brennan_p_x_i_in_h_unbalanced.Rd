@@ -30,6 +30,6 @@ is in Table 7.5 and his D study in Section 7.2.2.
 head(brennan_p_x_i_in_h_unbalanced, 8)
 }
 \seealso{
-\code{\link[=g_study]{g_study()}}, \code{\link[=d_study]{d_study()}}
+\code{\link[=g_study]{g_study()}}, \code{\link[=d_study]{d_study()}}, \code{\link[=g_study_general]{g_study_general()}}
 }
 \keyword{datasets}

@@ -7,11 +7,13 @@
 find_d_designs(comparison, coefficient, target)
 }
 \arguments{
-\item{comparison}{The object returned by \code{\link[=compare_d_studies]{compare_d_studies()}}.}
+\item{comparison}{The object returned by \code{\link[=compare_d_studies]{compare_d_studies()}} or
+\code{\link[=compare_d_studies_general]{compare_d_studies_general()}}.}
 
 \item{coefficient}{\code{"G"} or \code{"Phi"} (see \code{\link[=d_study]{d_study()}}).}
 
-\item{target}{A number between 0 and 1.}
+\item{target}{A number between 0 and 1. An estimate equal to the target up
+to rounding error, \code{sqrt(.Machine$double.eps)}, qualifies.}
 }
 \value{
 An object of class \code{d_study_selection}, a list with the following
@@ -21,7 +23,8 @@ elements:
 target, in their original order.}
 \item{\code{coefficient}}{The selected coefficient, \code{"G"} or \code{"Phi"}.}
 \item{\code{target}}{The minimum coefficient value.}
-\item{\code{meets_target}}{Whether each D study meets the target.}
+\item{\code{meets_target}}{Whether each D study meets the target; \code{NA}
+when the coefficient has no finite estimate.}
 \item{\code{comparison}}{The input comparison object.}
 }
 }
@@ -30,7 +33,7 @@ Returns the D studies in \code{comparison} whose estimated G or Phi is at
 least \code{target}.
 }
 \examples{
-# p x (R:T) designs with at most 12 ratings per person (Brennan, 2001,
+# p x (r:t) designs with at most 12 ratings per person (Brennan, 2001,
 # Table 4.6) whose G coefficient is at least .55.
 g_prt <- g_study(
   brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested"

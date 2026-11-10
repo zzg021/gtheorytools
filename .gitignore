@@ -6,3 +6,7 @@
 
 # Generated website; GitHub Actions builds and publishes it.
 /docs/
+
+# Built vignettes
+/doc/
+/Meta/

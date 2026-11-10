@@ -30,6 +30,6 @@ occasion 2.
 head(brennan_i_in_p)
 }
 \seealso{
-\code{\link[=g_study]{g_study()}}
+\code{\link[=g_study]{g_study()}}, \code{\link[=g_study_general]{g_study_general()}}
 }
 \keyword{datasets}

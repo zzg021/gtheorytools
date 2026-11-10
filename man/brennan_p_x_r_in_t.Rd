@@ -31,6 +31,6 @@ fixed). Appendix F gives the GENOVA run with tasks fixed.
 head(brennan_p_x_r_in_t)
 }
 \seealso{
-\code{\link[=g_study]{g_study()}}
+\code{\link[=g_study]{g_study()}}, \code{\link[=g_study_general]{g_study_general()}}
 }
 \keyword{datasets}

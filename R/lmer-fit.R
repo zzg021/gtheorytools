@@ -1,9 +1,10 @@
-# The lmer formula: a random intercept for each random effect, and the main
-# effect of a facet fixed in the G study as a fixed effect.
-.lmer_formula <- function(score_column, random_effects, fixed_effects = NULL) {
-  random_terms <- paste0("(1 | ", .lmer_effect_name(random_effects), ")")
+# The lmer formula: a random intercept for the interaction of the facets of
+# each random effect, and the effects of facets fixed in the G study as fixed
+# effects.
+.lmer_formula <- function(score_column, random_terms, fixed_effects = character(0)) {
+  random_terms <- paste0("(1 | ", random_terms, ")")
   right_side <- paste(random_terms, collapse = " + ")
-  if (!is.null(fixed_effects)) {
+  if (length(fixed_effects) > 0) {
     right_side <- paste(paste(fixed_effects, collapse = " + "), "+", right_side)
   }
   return(as.formula(paste(score_column, "~", right_side)))
@@ -187,17 +188,20 @@
   return(list(vc = vc, se = se_var, vcov = vcov_var, is_boundary = is_boundary))
 }
 
-# Rename lmer components to G-theory effect names, for example P:F1 to PxF1.
+# Rename lmer components to G-theory effect names, for example p:r:t to pr:t.
 .extract_variance_components <- function(fit, design) {
   raw <- .extract_vc_and_se(fit)
   effect_names <- c(design$random_effects, design$residual_effect)
-  lmer_names <- c(.lmer_effect_name(design$random_effects), "residual")
+  lmer_names <- c(unname(design$lmer_terms[design$random_effects]), "residual")
 
   boundary_effects <- effect_names[raw$is_boundary[lmer_names]]
   if (length(boundary_effects) > 0) {
+    boundary_labels <- vapply(
+      boundary_effects, .effect_label, character(1), facet_columns = design$facet_columns
+    )
     warning(
       "Variance component(s) estimated at the zero boundary: ",
-      paste(boundary_effects, collapse = ", "),
+      paste(boundary_labels, collapse = ", "),
       ". Delta-method standard errors are invalid at the boundary; returning NA.",
       call. = FALSE
     )

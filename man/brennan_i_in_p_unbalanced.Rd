@@ -29,6 +29,6 @@ Section 7.2.1.
 table(brennan_i_in_p_unbalanced$p)
 }
 \seealso{
-\code{\link[=g_study]{g_study()}}, \code{\link[=d_study]{d_study()}}
+\code{\link[=g_study]{g_study()}}, \code{\link[=d_study]{d_study()}}, \code{\link[=g_study_general]{g_study_general()}}
 }
 \keyword{datasets}

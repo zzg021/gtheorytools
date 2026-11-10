@@ -1,35 +1,34 @@
-.d_study_facet_names <- function(n_facets) {
-  if (n_facets == 1) {
-    return("F1")
-  }
-  return(c("F1", "F2"))
-}
-
 # A facet fixed in the G study keeps its observed conditions in the D study,
 # n' = N' = n, and may be omitted from universe_sizes and d_sizes.
-.fill_fixed_facet_sizes <- function(sizes, argument_name, fixed_facet, n_fixed, fixed_label) {
+# `fixed_sizes` holds the G-study n of each such facet, and `facet_columns`
+# the data column of each facet.
+.fill_fixed_facet_sizes <- function(sizes, argument_name, fixed_sizes, facet_columns) {
   values <- unlist(sizes)
 
-  if (!(fixed_facet %in% names(values))) {
-    values[fixed_facet] <- n_fixed
-    return(values)
-  }
+  for (fixed_facet in names(fixed_sizes)) {
+    n_fixed <- fixed_sizes[[fixed_facet]]
+    if (!(fixed_facet %in% names(values))) {
+      values[fixed_facet] <- n_fixed
+      next
+    }
 
-  if (!isTRUE(values[[fixed_facet]] == n_fixed)) {
-    stop(
-      fixed_label, " is fixed in the G study, so the D study uses its ", n_fixed,
-      " observed conditions: ", argument_name, "[\"", fixed_facet, "\"] must be ",
-      n_fixed, ". To sample from the fixed set, fit the G study without `fixed` ",
-      "and give N' in universe_sizes.",
-      call. = FALSE
-    )
+    if (!isTRUE(values[[fixed_facet]] == n_fixed)) {
+      column <- facet_columns[[fixed_facet]]
+      stop(
+        column, " is fixed in the G study, so the D study uses its ", n_fixed,
+        " observed conditions, and its size in ", argument_name, " must be ",
+        n_fixed, ". To sample from the fixed set, fit the G study with ",
+        column, " random and give N' in universe_sizes.",
+        call. = FALSE
+      )
+    }
   }
 
   return(values)
 }
 
 # Check one set of D-study sizes; n' cannot exceed a finite N'.
-.check_d_study_sizes <- function(universe_values, d_sizes, facet_names) {
+.check_d_study_sizes <- function(universe_values, d_sizes, facet_names, facet_columns) {
   d_values <- .check_size_vector(
     d_sizes, "d_sizes", facet_names, allow_inf = FALSE
   )
@@ -37,8 +36,9 @@
   for (facet in facet_names) {
     if (d_values[[facet]] > universe_values[[facet]]) {
       stop(
-        "d_sizes[\"", facet, "\"] exceeds universe_sizes[\"", facet, "\"]. ",
-        "The D-study sample size cannot exceed a finite universe size.",
+        "The D-study sample size of ", facet_columns[[facet]], ", n' = ",
+        d_values[[facet]], ", exceeds its universe size, N' = ",
+        universe_values[[facet]], ".",
         call. = FALSE
       )
     }
@@ -47,200 +47,137 @@
   return(d_values[facet_names])
 }
 
-.resolve_d_study_design <- function(g_design, d_design, d_nesting, n_facets) {
-  if (length(.d_study_facet_names(n_facets)) == 1L) {
-    allowed_designs <- c("crossed", "nested")
-  } else {
-    allowed_designs <- c("fully_crossed", "partially_nested", "fully_nested")
-  }
+# The object of measurement and the D-study design. The object of measurement
+# is a facet that is random in the G study and nonnested in the D study
+# (Brennan 2001, App. F). A D-study design is admissible when each facet's
+# D-study parents include its G-study parents: nested components can then be
+# summed into the more nested design.
+.resolve_d_study_design <- function(g_study_result, object_of_measurement, d_design) {
+  g_parents <- g_study_result$parents
+  facets <- names(g_parents)
 
-  if (is.null(d_design)) {
-    d_design <- g_design
-  } else if (length(d_design) != 1 || !(d_design %in% allowed_designs)) {
-    stop("d_design must be one of: ", paste(allowed_designs, collapse = ", "), ".", call. = FALSE)
-  }
-
-  nesting_level <- c(
-    crossed = 1,
-    nested = 2,
-    fully_crossed = 1,
-    partially_nested = 2,
-    fully_nested = 3
-  )
-
-  if (nesting_level[[d_design]] < nesting_level[[g_design]]) {
+  .check_single_string(object_of_measurement, "object_of_measurement")
+  if (!(object_of_measurement %in% facets)) {
     stop(
-      "d_design cannot be less nested than g_study_result$g_design. ",
-      "Variance components can be aggregated into a more nested D-study design, ",
-      "but already nested components cannot be decomposed into a less nested design.",
+      "object_of_measurement must be one of the facet symbols of the G-study ",
+      "design: ", paste(facets, collapse = ", "), ".",
+      .case_note(object_of_measurement, facets),
+      call. = FALSE
+    )
+  }
+  if (object_of_measurement %in% g_study_result$fixed_facets) {
+    stop(
+      object_of_measurement, " is fixed in the G study, so it cannot be the ",
+      "object of measurement.",
       call. = FALSE
     )
   }
 
-  target_is_nested <- d_design %in% c("partially_nested", "fully_nested")
-
-  if (!is.null(d_nesting)) {
-    if (!target_is_nested) {
+  d_string <- g_study_result$g_design
+  d_parents <- g_parents
+  if (!is.null(d_design)) {
+    parsed <- .parse_design(d_design, "d_design")
+    if (!setequal(parsed$facets, facets)) {
       stop(
-        "d_nesting is only used when d_design is partially_nested or fully_nested.",
+        "d_design must have the facets of the G-study design: ",
+        paste(facets, collapse = ", "), ".",
+        .case_note(parsed$facets, facets),
         call. = FALSE
       )
     }
+    d_string <- parsed$design
+    d_parents <- parsed$parents
 
-    if (length(d_nesting) != 1 || !(d_nesting %in% c("F2:F1", "F1:F2"))) {
-      stop("d_nesting must be one of: F2:F1, F1:F2.", call. = FALSE)
+    for (facet in facets) {
+      missing_parents <- setdiff(g_parents[[facet]], d_parents[[facet]])
+      if (length(missing_parents) > 0) {
+        stop(
+          "d_design cannot be less nested than the G-study design: ", facet,
+          " is nested within ", paste(missing_parents, collapse = " and "),
+          " in the G study but not in d_design. Variance components can be summed ",
+          "into a more nested D-study design, but nested components cannot be ",
+          "divided into a less nested design.",
+          call. = FALSE
+        )
+      }
     }
   }
 
-  if (g_design == "fully_crossed" && target_is_nested && is.null(d_nesting)) {
+  if (length(d_parents[[object_of_measurement]]) > 0) {
     stop(
-      "d_nesting must be specified when g_study_result$g_design is fully_crossed ",
-      "and d_design is partially_nested or fully_nested. Use d_nesting = \"F2:F1\" ",
-      "or d_nesting = \"F1:F2\".",
+      "The object of measurement must be a nonnested facet (Brennan 2001, ",
+      "App. F), but ", object_of_measurement, " is nested within ",
+      paste(d_parents[[object_of_measurement]], collapse = " and "),
+      " in the D-study design.",
       call. = FALSE
     )
-  }
-
-  # A nested two-facet G-study already fixes the nesting order as F2:F1.
-  if (g_design %in% c("partially_nested", "fully_nested")) {
-    if (!is.null(d_nesting) && d_nesting != "F2:F1") {
-      stop(
-        "d_nesting conflicts with the nesting order in g_study_result$g_design. ",
-        "This G-study object uses d_nesting = \"F2:F1\".",
-        call. = FALSE
-      )
-    }
-
-    d_nesting <- "F2:F1"
   }
 
   return(list(
-    g_design = g_design,
-    d_design = d_design,
-    d_nesting = d_nesting
+    g_design = g_study_result$g_design,
+    d_design = d_string,
+    object_of_measurement = object_of_measurement,
+    g_parents = g_parents,
+    d_parents = d_parents
   ))
 }
 
-.same_design_sources <- function(effect_names) {
-  result <- as.list(effect_names)
-  names(result) <- effect_names
-  return(result)
-}
-
-.target_component_sources <- function(g_design, d_design, d_nesting, source_effects) {
-  if (g_design == d_design) {
-    return(.same_design_sources(source_effects))
-  }
-
-  if (g_design == "crossed" && d_design == "nested") {
-    result <- list(
-      "P",
-      c("F1", "PxF1")
-    )
-    names(result) <- c("P", "F1:P")
-    return(result)
-  }
-
-  if (g_design == "fully_crossed" && d_design == "partially_nested") {
-    if (d_nesting == "F2:F1") {
-      result <- list(
-        "P",
-        "F1",
-        "PxF1",
-        c("F2", "F1xF2"),
-        c("PxF2", "PxF1xF2")
-      )
-      names(result) <- c("P", "F1", "PxF1", "F2:F1", "F2:F1xP")
-      return(result)
-    }
-
-    result <- list(
-      "P",
-      "F2",
-      "PxF2",
-      c("F1", "F1xF2"),
-      c("PxF1", "PxF1xF2")
-    )
-    names(result) <- c("P", "F2", "PxF2", "F1:F2", "F1:F2xP")
-    return(result)
-  }
-
-  if (g_design == "fully_crossed" && d_design == "fully_nested") {
-    if (d_nesting == "F2:F1") {
-      result <- list(
-        "P",
-        c("F1", "PxF1"),
-        c("F2", "PxF2", "F1xF2", "PxF1xF2")
-      )
-      names(result) <- c("P", "F1:P", "F2:F1:P")
-      return(result)
-    }
-
-    result <- list(
-      "P",
-      c("F2", "PxF2"),
-      c("F1", "PxF1", "F1xF2", "PxF1xF2")
-    )
-    names(result) <- c("P", "F2:P", "F1:F2:P")
-    return(result)
-  }
-
-  if (g_design == "partially_nested" && d_design == "fully_nested") {
-    result <- list(
-      "P",
-      c("F1", "PxF1"),
-      c("F2:F1", "F2:F1xP")
-    )
-    names(result) <- c("P", "F1:P", "F2:F1:P")
-    return(result)
-  }
-}
-
-# A facet fixed in the G study has no fitted main-effect variance. A D-study
-# component formed from that main effect alone is its quadratic form and is
-# dropped. A component that absorbs the main effect together with other
-# effects nests the fixed facet within another facet. That is an error: the
-# fixed facet is one shared set of conditions, and nesting it would need a
-# separate set in every level of the parent.
-.drop_fixed_main_effect <- function(target_sources, fixed_facet, facet_columns) {
-  fixed_label <- facet_columns[[fixed_facet]]
+# Each G-study component is added to the smallest D-study effect that
+# contains its facets: those facets and every facet they are nested within
+# in the D-study design. From a crossed G study this is Brennan's (2001,
+# p. 63) rule for confounded effects. A D-study effect whose facets are all
+# fixed in the G study is a fixed effect and has no component.
+.target_component_sources <- function(source_effects, d_parents, fixed_facets) {
+  d_effects <- .design_effects(d_parents)
   result <- list()
 
-  for (target_effect in names(target_sources)) {
-    sources <- target_sources[[target_effect]]
-
-    if (!(fixed_facet %in% sources)) {
-      result[[target_effect]] <- sources
-      next
-    }
-    if (length(sources) == 1) {
+  for (target_effect in names(d_effects)) {
+    target_facets <- d_effects[[target_effect]]
+    if (all(target_facets %in% fixed_facets)) {
       next
     }
 
-    # Nesting within P is rejected earlier by .check_fixed_nested_within_p().
-    parent <- setdiff(.parse_effect(target_effect), c(fixed_facet, "P"))
-    stop(
-      fixed_label, " is fixed in the G study, so it is one shared set of conditions ",
-      "and cannot be nested within ", facet_columns[[parent]], " in the D study.",
-      call. = FALSE
+    is_source <- vapply(
+      source_effects,
+      function(source_effect) {
+        source_facets <- .parse_effect(source_effect)
+        closure <- union(source_facets, unlist(d_parents[source_facets]))
+        return(setequal(closure, target_facets))
+      },
+      logical(1)
     )
+    result[[target_effect]] <- unname(source_effects[is_source])
   }
 
   return(result)
+}
+
+# A facet fixed in the G study is one shared set of conditions, so the D-study
+# design keeps its G-study parents.
+.check_g_fixed_facet_nesting <- function(fixed_facets, design, facet_columns) {
+  for (fixed_facet in fixed_facets) {
+    new_parents <- setdiff(design$d_parents[[fixed_facet]], design$g_parents[[fixed_facet]])
+    if (length(new_parents) > 0) {
+      stop(
+        facet_columns[[fixed_facet]], " is fixed in the G study, so it is one shared ",
+        "set of conditions and cannot be nested within ",
+        paste(facet_columns[new_parents], collapse = " and "), " in the D study.",
+        call. = FALSE
+      )
+    }
+  }
+  return(invisible(NULL))
 }
 
 # Each facet is random (N' = Inf), finite (n' < N' < Inf), or fixed (n' = N').
 .d_facet_status <- function(universe_sizes, d_sizes) {
-  universe_values <- unlist(universe_sizes)
-  d_values <- unlist(d_sizes)
-  facets <- sort(names(d_values))
   result <- vapply(
-    facets,
+    names(d_sizes),
     function(facet) {
-      if (is.infinite(universe_values[[facet]])) {
+      if (is.infinite(universe_sizes[[facet]])) {
         return("random")
       }
-      if (d_values[[facet]] == universe_values[[facet]]) {
+      if (d_sizes[[facet]] == universe_sizes[[facet]]) {
         return("fixed")
       }
       return("finite")
@@ -251,19 +188,22 @@
   return(result)
 }
 
-# A fixed set of conditions common to all persons cannot be nested within P.
-.check_fixed_nested_within_p <- function(fixed_facets, design, facet_columns) {
-  nested_within_p <- switch(
-    design$d_design,
-    nested = "F1",
-    fully_nested = c("F1", "F2"),
-    character(0)
-  )
-  for (facet in intersect(nested_within_p, fixed_facets)) {
+# A facet with n' = N' is one set of conditions common to all objects of
+# measurement, so it is crossed with the object of measurement.
+.check_fixed_nested_within_object <- function(fixed_facets, design, facet_columns) {
+  object <- design$object_of_measurement
+  object_column <- facet_columns[[object]]
+  d_parents <- design$d_parents
+  nested_within_object <- names(d_parents)[vapply(
+    d_parents,
+    function(parents) object %in% parents,
+    logical(1)
+  )]
+  for (facet in intersect(nested_within_object, fixed_facets)) {
     stop(
-      facet_columns[[facet]], " is fixed (n' = N') but nested within ",
-      facet_columns[["P"]], " in the D-study design: a fixed set of conditions ",
-      "common to all persons cannot be nested within persons.",
+      facet_columns[[facet]], " is fixed (n' = N') and nested within ", object_column,
+      " in the D-study design. A fixed facet is one set of conditions common to ",
+      "all levels of ", object_column, ", so it is crossed with ", object_column, ".",
       call. = FALSE
     )
   }
@@ -272,7 +212,6 @@
 
 # Check restrictions and approximations for facets fixed in the D study.
 .check_fixed_facets <- function(facet_status, d_sizes, g_study_result, design) {
-  facet_columns <- g_study_result$facet_columns
   fixed_facets <- names(facet_status)[facet_status == "fixed"]
 
   if (length(fixed_facets) == length(facet_status)) {
@@ -283,35 +222,36 @@
     )
   }
 
-  # A facet fixed in the G study was checked by .prepare_d_study().
-  .check_fixed_nested_within_p(
-    setdiff(fixed_facets, g_study_result$fixed_facet), design, facet_columns
-  )
+  # Facets fixed in the G study were checked by .check_g_fixed_facet_nesting().
+  facet_columns <- g_study_result$facet_columns
+  d_only_fixed <- setdiff(fixed_facets, g_study_result$fixed_facets)
+  .check_fixed_nested_within_object(d_only_fixed, design, facet_columns)
 
   # Facets fixed only in the D study, whose conditions should be the G-study ones.
-  d_only_fixed <- setdiff(fixed_facets, g_study_result$fixed_facet)
-  d_values <- unlist(d_sizes)
   for (facet in d_only_fixed) {
-    if (!isTRUE(d_values[[facet]] == g_study_result$sample_sizes[[facet]])) {
+    if (!isTRUE(d_sizes[[facet]] == g_study_result$sample_sizes[[facet]])) {
       warning(
-        facet_columns[[facet]], " is fixed at n' = N' = ", d_values[[facet]],
-        ", a different number of conditions than the G study observed, so the ",
-        "D-study conditions are not the G-study conditions and the results are ",
-        "approximations (Brennan 2001, Sec. 4.3).",
+        facet_columns[[facet]], " is fixed at n' = N' = ", d_sizes[[facet]],
+        ", and the G study ",
+        "observed ", g_study_result$sample_sizes[[facet]], " conditions, so the ",
+        "results are approximations (Brennan 2001, Sec. 4.3).",
         call. = FALSE
       )
     }
   }
 
-  if (design$g_design == "fully_crossed" && design$d_design == "partially_nested") {
-    nested_facet <- if (design$d_nesting == "F2:F1") "F2" else "F1"
-    parent <- setdiff(c("F1", "F2"), nested_facet)
-    if (nested_facet %in% d_only_fixed) {
+  # Facets fixed only in the D study and nested there within a facet they are
+  # crossed with in the G study. Nesting within the object of measurement was
+  # rejected above.
+  for (facet in d_only_fixed) {
+    new_parents <- setdiff(design$d_parents[[facet]], design$g_parents[[facet]])
+    if (length(new_parents) > 0) {
+      parent_label <- paste(facet_columns[new_parents], collapse = " and ")
       warning(
-        facet_columns[[nested_facet]], " is fixed and nested within ",
-        facet_columns[[parent]], " in the D study but crossed with it in the G study, ",
-        "so each level of ", facet_columns[[parent]], " needs its own conditions ",
-        "and the results are approximations (Brennan 2001, Sec. 4.3).",
+        facet_columns[[facet]], " is fixed and nested within ", parent_label,
+        " in the D study but crossed with it in the G study, so each level of ",
+        parent_label, " needs its own conditions and the results are ",
+        "approximations (Brennan 2001, Sec. 4.3).",
         call. = FALSE
       )
     }
@@ -319,57 +259,39 @@
   return(invisible(NULL))
 }
 
-.component_transform_matrix <- function(variance_component, target_sources) {
-  source_effects <- names(variance_component)
-  target_effects <- names(target_sources)
-
-  transform_matrix <- matrix(
-    0,
-    nrow = length(target_effects),
-    ncol = length(source_effects),
-    dimnames = list(target_effects, source_effects)
-  )
-
-  for (target_effect in target_effects) {
-    transform_matrix[target_effect, target_sources[[target_effect]]] <- 1
-  }
-
-  return(transform_matrix)
-}
-
+# The D-study components are sums of G-study components, W sigma^2 with W
+# marking the sources of each, and their covariance is W V W'.
 .recode_variance_components <- function(variance_component, variance_component_vcov,
-                                        g_design, d_design, d_nesting,
-                                        fixed_facet = NULL, facet_columns = NULL) {
-  target_sources <- .target_component_sources(
-    g_design = g_design,
-    d_design = d_design,
-    d_nesting = d_nesting,
-    source_effects = names(variance_component)
+                                        d_parents, fixed_facets) {
+  g_effects <- names(variance_component)
+  component_sources <- .target_component_sources(g_effects, d_parents, fixed_facets)
+  d_effects <- names(component_sources)
+  weights <- matrix(
+    0,
+    nrow = length(d_effects),
+    ncol = length(g_effects),
+    dimnames = list(d_effects, g_effects)
   )
-  if (!is.null(fixed_facet)) {
-    target_sources <- .drop_fixed_main_effect(target_sources, fixed_facet, facet_columns)
+  for (effect in d_effects) {
+    weights[effect, component_sources[[effect]]] <- 1
   }
-  transform_matrix <- .component_transform_matrix(variance_component, target_sources)
-  g_effects <- colnames(transform_matrix)
 
-  d_variance_component <- as.numeric(transform_matrix %*% variance_component[g_effects])
-  names(d_variance_component) <- rownames(transform_matrix)
-
-  d_variance_component_vcov <- transform_matrix %*%
+  d_variance_component <- as.numeric(weights %*% variance_component)
+  names(d_variance_component) <- d_effects
+  d_variance_component_vcov <- weights %*%
     variance_component_vcov[g_effects, g_effects, drop = FALSE] %*%
-    t(transform_matrix)
+    t(weights)
 
   component_mapping <- data.frame(
-    effect = rownames(transform_matrix),
-    source_effects = vapply(target_sources, paste, character(1), collapse = " + "),
+    effect = d_effects,
+    source_effects = vapply(component_sources, paste, character(1), collapse = " + "),
     row.names = NULL
   )
 
   return(list(
     variance_component = d_variance_component,
     variance_component_vcov = d_variance_component_vcov,
-    component_sources = target_sources,
-    component_mapping = component_mapping,
-    transform_matrix = transform_matrix
+    component_sources = component_sources,
+    component_mapping = component_mapping
   ))
 }

@@ -28,8 +28,8 @@ urgenova_p_x_i_in_h <- function() {
   return(long_scores(scores, conditions))
 }
 
-effects_i_in_p <- list(p = "p", ip = c("i", "p"))
+effects_i_in_p <- list(p = "p", "i:p" = c("i", "p"))
 effects_p_x_i <- list(p = "p", i = "i", pi = c("p", "i"))
 effects_p_x_i_in_h <- list(
-  p = "p", h = "h", ph = c("p", "h"), ih = c("i", "h"), pih = c("p", "i", "h")
+  p = "p", h = "h", "i:h" = c("i", "h"), ph = c("p", "h"), "pi:h" = c("p", "i", "h")
 )

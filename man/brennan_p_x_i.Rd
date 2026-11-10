@@ -27,6 +27,6 @@ Dichotomous scores of 10 persons on 12 items, a p x i design. Brennan's
 head(brennan_p_x_i)
 }
 \seealso{
-\code{\link[=g_study]{g_study()}}
+\code{\link[=g_study]{g_study()}}, \code{\link[=g_study_general]{g_study_general()}}
 }
 \keyword{datasets}

@@ -1,28 +1,29 @@
-# A named list gives a Cartesian grid; a data frame gives explicit rows.
-# Size values are checked by .evaluate_d_study() for each row, so an invalid
-# size is reported in its own row.
-.d_study_candidates <- function(d_sizes, g_study_result) {
-  facets <- .d_study_facet_names(g_study_result$n_facets)
-  fixed_facet <- g_study_result$fixed_facet
+# A named list gives a Cartesian grid, the first of `facets` varying fastest;
+# a data frame gives explicit rows. `fixed_sizes` holds the G-study n of each
+# facet fixed in the G study. Size values are checked by .evaluate_d_study()
+# for each row, so an invalid size is reported in its own row.
+.d_study_candidates <- function(d_sizes, facets, fixed_sizes) {
+  fixed_facets <- names(fixed_sizes)
   if (is.numeric(d_sizes) && is.null(dim(d_sizes))) {
     d_sizes <- as.list(d_sizes)
   }
   if (!is.list(d_sizes) || is.null(names(d_sizes)) ||
       anyDuplicated(names(d_sizes)) ||
       !all(names(d_sizes) %in% facets) ||
-      !all(setdiff(facets, fixed_facet) %in% names(d_sizes))) {
-    stop("d_sizes must name each facet (F1, or F1 and F2) exactly once; ",
-         "a facet fixed in the G study may be omitted.",
+      !all(setdiff(facets, fixed_facets) %in% names(d_sizes))) {
+    stop("d_sizes must name each facet (", paste(facets, collapse = ", "),
+         ") exactly once; facets fixed in the G study may be omitted.",
+         .case_note(names(d_sizes), facets),
          call. = FALSE)
   }
   for (facet in names(d_sizes)) {
     values <- d_sizes[[facet]]
     if (!is.numeric(values) || length(values) == 0L) {
-      stop("d_sizes[\"", facet, "\"] must be a nonempty numeric vector.", call. = FALSE)
+      stop("Each element of d_sizes must be a nonempty numeric vector.", call. = FALSE)
     }
   }
-  if (!is.null(fixed_facet) && !(fixed_facet %in% names(d_sizes))) {
-    d_sizes[[fixed_facet]] <- g_study_result$sample_sizes[[fixed_facet]]
+  for (fixed_facet in setdiff(fixed_facets, names(d_sizes))) {
+    d_sizes[[fixed_facet]] <- fixed_sizes[[fixed_facet]]
   }
   d_sizes <- d_sizes[facets]
   if (is.data.frame(d_sizes)) {
@@ -34,67 +35,69 @@
   return(candidates)
 }
 
-#' Compare D Studies at Different Sample Sizes
+#' Compare D Studies from `g_study_general()` at Different Sample Sizes
 #'
-#' Evaluates combinations of facet sample sizes from one G study,
-#' with one D-study design and one set of universe sizes.
+#' Evaluates combinations of facet sample sizes from one G study, with one
+#' object of measurement, one D-study design, and one set of universe sizes.
 #'
-#' @inheritParams d_study
-#' @param d_sizes D-study sample sizes: a named list of numeric vectors for
-#'   all combinations (F1 varies fastest), a data frame with one combination
-#'   per row, or a named numeric vector for one D study.
+#' @inheritParams d_study_general
+#' @param d_sizes D-study sample sizes, named by facet symbol: a named list
+#'   of numeric vectors for all combinations (the first facet of the design
+#'   varies fastest), a data frame with one combination per row, or a named
+#'   numeric vector for one D study.
 #'
-#' @returns An object of class `d_study_comparison`, a list with the following
-#'   elements:
+#' @returns An object of class `d_study_comparison_general`, a list with the
+#'   following elements:
 #' \describe{
 #'   \item{\code{scenarios}}{A data frame with one row per D study. Columns
 #'     contain the row number (`scenario`), facet sample sizes, estimates of
 #'     `tau`, `delta`, `Delta`, `G`, and `Phi`, their `se_` columns,
 #'     `se_available`, and `status` (`"ok"`, `"warning"`, or `"error"`) with
-#'     the `warning` and `error` messages. See [d_study()] for the
+#'     the `warning` and `error` messages. See [d_study_general()] for the
 #'     definitions of the variances and coefficients.}
 #'   \item{Design information}{\code{g_design}, \code{d_design},
-#'     \code{d_nesting}, \code{universe_sizes},
-#'     \code{facet_columns}, and \code{fixed_facet}, which apply to all rows.}
+#'     \code{object_of_measurement}, \code{universe_sizes},
+#'     \code{facet_columns}, and \code{fixed_facets}, which apply to all rows.}
 #' }
 #' @seealso [find_d_designs()] to select D studies that meet a target.
 #'
 #' @examples
-#' # p x I x O: 4, 8, or 16 items on 1 or 2 occasions (Brennan, 2001,
+#' # p x i x o: 4, 8, or 16 items on 1 or 2 occasions (Brennan, 2001,
 #' # Table 4.4).
-#' g_pio <- g_study(
-#'   brennan_p_x_i_x_o, p = "p", f1 = "i", f2 = "o", design = "fully_crossed"
-#' )
-#' compare_d_studies(
-#'   g_pio,
-#'   universe_sizes = c(F1 = Inf, F2 = Inf),
-#'   d_sizes = list(F1 = c(4, 8, 16), F2 = c(1, 2))
+#' g_pio <- g_study_general(brennan_p_x_i_x_o, design = "p x i x o")
+#' compare_d_studies_general(
+#'   g_pio, object_of_measurement = "p",
+#'   universe_sizes = c(i = Inf, o = Inf),
+#'   d_sizes = list(i = c(4, 8, 16), o = c(1, 2))
 #' )
 #'
-#' # p x (R:T): the listed numbers of tasks and raters per task, with at most
+#' # p x (r:t): the listed numbers of tasks and raters per task, with at most
 #' # 12 ratings per person (Table 4.6).
-#' g_prt <- g_study(
-#'   brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested"
-#' )
-#' compare_d_studies(
-#'   g_prt,
-#'   universe_sizes = c(F1 = Inf, F2 = Inf),
-#'   d_sizes = data.frame(F1 = 1:6, F2 = c(12, 6, 4, 3, 2, 2))
+#' g_prt <- g_study_general(brennan_p_x_r_in_t, design = "p x (r:t)")
+#' compare_d_studies_general(
+#'   g_prt, object_of_measurement = "p",
+#'   universe_sizes = c(r = Inf, t = Inf),
+#'   d_sizes = data.frame(r = c(12, 6, 4, 3, 2, 2), t = 1:6)
 #' )
 #'
 #' # Tasks fixed in the G study: the task sizes can be omitted (Table 4.8).
-#' g_prt_fixed <- g_study(
-#'   brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested",
-#'   fixed = "t"
+#' g_prt_fixed <- g_study_general(
+#'   brennan_p_x_r_in_t, design = "p x (r:t)", fixed = "t"
 #' )
-#' compare_d_studies(g_prt_fixed, universe_sizes = c(F2 = Inf), d_sizes = list(F2 = 1:4))
+#' compare_d_studies_general(
+#'   g_prt_fixed, object_of_measurement = "p",
+#'   universe_sizes = c(r = Inf), d_sizes = list(r = 1:4)
+#' )
 #'
 #' @export
-compare_d_studies <- function(g_study_result, universe_sizes, d_sizes,
-                              d_design = NULL, d_nesting = NULL) {
-  prepared <- .prepare_d_study(g_study_result, universe_sizes, d_design, d_nesting)
+compare_d_studies_general <- function(g_study_result, object_of_measurement,
+                                      universe_sizes, d_sizes, d_design = NULL) {
+  prepared <- .prepare_d_study(g_study_result, object_of_measurement, universe_sizes, d_design)
   design <- prepared$design
-  candidates <- .d_study_candidates(d_sizes, g_study_result)
+  fixed_facets <- g_study_result$fixed_facets
+  candidates <- .d_study_candidates(
+    d_sizes, prepared$facet_names, g_study_result$sample_sizes[fixed_facets]
+  )
 
   n_candidates <- nrow(candidates)
   quantities <- c("tau", "delta", "Delta", "G", "Phi")
@@ -152,26 +155,38 @@ compare_d_studies <- function(g_study_result, universe_sizes, d_sizes,
       scenarios = scenarios,
       g_design = design$g_design,
       d_design = design$d_design,
-      d_nesting = design$d_nesting,
+      object_of_measurement = design$object_of_measurement,
       universe_sizes = prepared$universe_sizes,
       facet_columns = g_study_result$facet_columns,
-      fixed_facet = g_study_result$fixed_facet
+      fixed_facets = g_study_result$fixed_facets
     ),
-    class = "d_study_comparison"
+    class = "d_study_comparison_general"
   ))
 }
 
 #' @export
-print.d_study_comparison <- function(x, ..., digits = 7, row.names = FALSE) {
-  cat("D-study comparison: ", x$g_design, " -> ", x$d_design, "\n", sep = "")
-  if (!is.null(x$d_nesting)) {
-    cat("Nesting: ", x$d_nesting, " (child sizes are per parent level)\n", sep = "")
+print.d_study_comparison_general <- function(x, ..., digits = 7, row.names = FALSE) {
+  design_line <- x$d_design
+  if (x$d_design != x$g_design) {
+    design_line <- paste0(x$g_design, " -> ", x$d_design)
+  }
+  cat("D-study comparison: ", design_line, "\n", sep = "")
+  cat("Object of measurement: ", x$object_of_measurement, "\n", sep = "")
+  if (grepl(":", x$d_design, fixed = TRUE)) {
+    cat("Sizes of nested facets are per level of the facets they are nested within.\n")
   }
   facets <- names(x$universe_sizes)
   for (facet in facets) {
-    cat(facet, " = ", x$facet_columns[[facet]], "; N' = ",
+    cat(.facet_display(facet, x$facet_columns), ": N' = ",
         x$universe_sizes[[facet]], "\n", sep = "")
   }
+  .print_scenarios(x, facets, digits, row.names, ...)
+  return(invisible(x))
+}
+
+# The printed scenarios of a comparison: sizes, G, Phi, and status when a
+# scenario has a warning or error.
+.print_scenarios <- function(x, facets, digits, row.names, ...) {
   columns <- c("scenario", facets, "G", "Phi")
   if (any(x$scenarios$status != "ok")) {
     columns <- c(columns, "status")
@@ -182,7 +197,7 @@ print.d_study_comparison <- function(x, ..., digits = 7, row.names = FALSE) {
     cat("SEs are unavailable for some or all quantities in ", n_missing_se,
         " scenarios.\n", sep = "")
   }
-  return(invisible(x))
+  return(invisible(NULL))
 }
 
 #' Select D Studies That Meet a Coefficient Target
@@ -190,9 +205,11 @@ print.d_study_comparison <- function(x, ..., digits = 7, row.names = FALSE) {
 #' Returns the D studies in `comparison` whose estimated G or Phi is at
 #' least `target`.
 #'
-#' @param comparison The object returned by [compare_d_studies()].
+#' @param comparison The object returned by [compare_d_studies()] or
+#'   [compare_d_studies_general()].
 #' @param coefficient `"G"` or `"Phi"` (see [d_study()]).
-#' @param target A number between 0 and 1.
+#' @param target A number between 0 and 1. An estimate equal to the target up
+#'   to rounding error, `sqrt(.Machine$double.eps)`, qualifies.
 #'
 #' @returns An object of class `d_study_selection`, a list with the following
 #'   elements:
@@ -201,12 +218,13 @@ print.d_study_comparison <- function(x, ..., digits = 7, row.names = FALSE) {
 #'     target, in their original order.}
 #'   \item{\code{coefficient}}{The selected coefficient, `"G"` or `"Phi"`.}
 #'   \item{\code{target}}{The minimum coefficient value.}
-#'   \item{\code{meets_target}}{Whether each D study meets the target.}
+#'   \item{\code{meets_target}}{Whether each D study meets the target; `NA`
+#'     when the coefficient has no finite estimate.}
 #'   \item{\code{comparison}}{The input comparison object.}
 #' }
 #'
 #' @examples
-#' # p x (R:T) designs with at most 12 ratings per person (Brennan, 2001,
+#' # p x (r:t) designs with at most 12 ratings per person (Brennan, 2001,
 #' # Table 4.6) whose G coefficient is at least .55.
 #' g_prt <- g_study(
 #'   brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested"
@@ -220,8 +238,12 @@ print.d_study_comparison <- function(x, ..., digits = 7, row.names = FALSE) {
 #'
 #' @export
 find_d_designs <- function(comparison, coefficient, target) {
-  if (!inherits(comparison, "d_study_comparison")) {
-    stop("comparison must be the result of compare_d_studies().", call. = FALSE)
+  if (!inherits(comparison, c("d_study_comparison", "d_study_comparison_general"))) {
+    stop(
+      "comparison must be the result of compare_d_studies() or ",
+      "compare_d_studies_general().",
+      call. = FALSE
+    )
   }
   if (length(coefficient) != 1L || !(coefficient %in% c("G", "Phi"))) {
     stop("coefficient must be \"G\" or \"Phi\".", call. = FALSE)

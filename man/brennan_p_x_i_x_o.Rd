@@ -23,12 +23,12 @@ brennan_p_x_i_x_o
 \description{
 Scores from 0 to 9 of 10 persons on 4 items on each of 2 occasions, a
 p x i x o design. Brennan's (2001) G study is in Table 3.3 and his
-D studies in Tables 4.4 (p x I x O) and 4.5 (p x (I:O)).
+D studies in Tables 4.4 (p x i x o) and 4.5 (p x (i:o)).
 }
 \examples{
 head(brennan_p_x_i_x_o)
 }
 \seealso{
-\code{\link[=g_study]{g_study()}}
+\code{\link[=g_study]{g_study()}}, \code{\link[=g_study_general]{g_study_general()}}
 }
 \keyword{datasets}

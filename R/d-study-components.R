@@ -1,177 +1,86 @@
-# For each component (target), collect the components (sources) that contain
-# all of its facets. A target without the object of measurement collects only
-# sources without it.
-.components_by_target <- function(variance_components, fn,
-                                  object_of_measurement = "P") {
-  result <- list()
-
-  for (target_name in names(variance_components)) {
-    target <- fn(target_name)
-    target_has_object <- object_of_measurement %in% target
-
-    component_names <- names(variance_components)[vapply(
-      names(variance_components),
-      function(source_name) {
-        source <- fn(source_name)
-
-        all(target %in% source) &&
-          (target_has_object || !(object_of_measurement %in% source))
-      },
-      logical(1)
-    )]
-
-    result[[target_name]] <- variance_components[component_names]
-  }
-
-  return(result)
-}
-
-# The facets of each component other than the object of measurement.
-.child_components_without_object <- function(variance_components,
-                                             object_of_measurement = "P",
-                                             split_pattern = "[:x]") {
-  result <- lapply(names(variance_components), function(component_name) {
-    facets <- unlist(strsplit(component_name, split_pattern, perl = TRUE))
-    return(facets[facets != "" & facets != object_of_measurement])
-  })
-  if (length(result) > 0) {
-    names(result) <- names(variance_components)
-  }
-
-  return(result)
-}
-
 # Single-observation components in the universe of generalization (Brennan
-# Eq. 5.4): add each contributing higher-order component divided by the
-# product of N' over its added facets.
-.single_obs_transform_matrix <- function(variance_component, universe_sizes,
-                                         object_of_measurement = "P") {
-  component_list <- .components_by_target(
-    variance_component,
-    fn = .parse_effect,
-    object_of_measurement
-  )
-  component_names <- names(component_list)
-  transform_matrix <- matrix(
+# Eq. 5.4) as weights on the D-study components: each component adds the
+# components that contain all of its facets, each divided by the product of N'
+# over the facets it adds. A component without the object of measurement adds
+# only components without it.
+.single_obs_weights <- function(effects, universe_sizes, object_of_measurement) {
+  result <- matrix(
     0,
-    nrow = length(component_names),
-    ncol = length(variance_component),
-    dimnames = list(component_names, names(variance_component))
+    nrow = length(effects),
+    ncol = length(effects),
+    dimnames = list(effects, effects)
   )
 
-  for (target_name in component_names) {
-    target <- .parse_effect(target_name)
-    for (source_name in names(component_list[[target_name]])) {
-      denominator <- 1
-      product_facets <- setdiff(.parse_effect(source_name), target)
-
-      for (facet in product_facets) {
-        denominator <- denominator * universe_sizes[[facet]]
+  for (target in effects) {
+    target_facets <- .parse_effect(target)
+    target_has_object <- object_of_measurement %in% target_facets
+    for (source in effects) {
+      source_facets <- .parse_effect(source)
+      if (!all(target_facets %in% source_facets)) {
+        next
       }
-
-      transform_matrix[target_name, source_name] <- 1 / denominator
+      if (!target_has_object && object_of_measurement %in% source_facets) {
+        next
+      }
+      added_facets <- setdiff(source_facets, target_facets)
+      result[target, source] <- 1 / prod(universe_sizes[added_facets])
     }
   }
 
-  return(transform_matrix)
-}
-
-.single_obs_vc <- function(variance_component, universe_sizes, object_of_measurement = "P") {
-  transform_matrix <- .single_obs_transform_matrix(
-    variance_component,
-    universe_sizes,
-    object_of_measurement
-  )
-  result_single_obs <- as.numeric(
-    transform_matrix %*% variance_component[colnames(transform_matrix)]
-  )
-  return(matrix(
-    result_single_obs, 1, dimnames = list(NULL, rownames(transform_matrix))
-  ))
-}
-
-.single_obs_vcov <- function(variance_component, universe_sizes, variance_component_vcov,
-                             object_of_measurement = "P") {
-  transform_matrix <- .single_obs_transform_matrix(
-    variance_component,
-    universe_sizes,
-    object_of_measurement
-  )
-  component_names <- rownames(transform_matrix)
-
-  result <- transform_matrix %*%
-    variance_component_vcov[names(variance_component), names(variance_component), drop = FALSE] %*%
-    t(transform_matrix)
-
-  dimnames(result) <- list(component_names, component_names)
   return(result)
 }
 
 # Multiplier C_A / h_A from the single-observation to the mean-score component
 # (Brennan Eqs. 5.2-5.4). h_A is the product of n' over the facets of A other
-# than P. C_A is the product of (1 - n'/N') over the facets of A, other than P,
-# that precede any ":": every facet of a crossed component, and only the
-# innermost facet of a nested one.
-.d_mean_multiplier <- function(variance_component, single_obs, universe_sizes,
-                               d_sizes, object_of_measurement = "P") {
-  component_children <- .child_components_without_object(
-    variance_component,
-    object_of_measurement
-  )
-  result_multiplier <- numeric(length(single_obs))
-  names(result_multiplier) <- colnames(single_obs)
+# than the object of measurement, and C_A is the product of (1 - n'/N') over
+# the primary indices of A other than the object of measurement.
+.d_mean_multiplier <- function(single_obs, universe_sizes, d_sizes, d_parents,
+                               object_of_measurement) {
+  component_names <- colnames(single_obs)
+  result_multiplier <- numeric(length(component_names))
+  names(result_multiplier) <- component_names
 
-  for (i in seq_along(single_obs)) {
+  for (component_name in component_names) {
+    facets <- .parse_effect(component_name)
+    primary_facets <- .primary_indices(facets, d_parents)
     multiplier <- 1
-    component_name <- colnames(single_obs)[i]
-    nested_portion <- strsplit(component_name, "x", fixed = TRUE)[[1]][1]
-    if (grepl(":", nested_portion, fixed = TRUE)) {
-      nested_facets <- unlist(strsplit(nested_portion, ":", fixed = TRUE))
-      nested_facets <- nested_facets[
-        nested_facets != "" & nested_facets != object_of_measurement
-      ]
-      innermost_facet <- nested_facets[1]
-      outer_sizes <- vapply(
-        nested_facets[-1],
-        function(facet) d_sizes[[facet]],
-        numeric(1)
-      )
-      multiplier <- (1 - d_sizes[[innermost_facet]] / universe_sizes[[innermost_facet]]) /
-        d_sizes[[innermost_facet]] / prod(outer_sizes)
-    } else {
-      for (facet in component_children[[component_name]]) {
-        multiplier <- multiplier *
-          (1 - d_sizes[[facet]] / universe_sizes[[facet]]) / d_sizes[[facet]]
-      }
+
+    for (facet in setdiff(primary_facets, object_of_measurement)) {
+      multiplier <- multiplier * (1 - d_sizes[[facet]] / universe_sizes[[facet]])
     }
-    result_multiplier[i] <- multiplier
+    for (facet in setdiff(facets, object_of_measurement)) {
+      multiplier <- multiplier / d_sizes[[facet]]
+    }
+    result_multiplier[[component_name]] <- multiplier
   }
 
   return(result_multiplier)
 }
 
 # Multipliers for a D study with the G-study pattern of unbalanced data
-# (Brennan 2001, Sec. 7.2), every facet random. Person p's mean score gives the
-# alpha cell c the weight a_pc = n_pc / n_p+, its share of the person's scores.
+# (Brennan 2001, Sec. 7.2), every facet random. With o the object of
+# measurement, the mean score of level o gives the alpha cell c the weight
+# a_oc = n_oc / n_o+, its share of the scores of o.
 #
-# The absolute-error multiplier of sigma^2(alpha) is the mean over persons of
-# sum_c a_pc^2: 1 over the harmonic mean of the n_i:p in i:p (Eqs. 7.18-7.19),
-# 1 / n~_h for h and ph and 1 / n_i+ for i:h and pi:h in p x (I:H) (Eqs. 7.27
-# and 7.28), and 1 over the harmonic mean of the n_p in p x I with missing
-# scores (Eqs. 7.41-7.42).
+# The absolute-error multiplier of sigma^2(alpha) is the mean over the levels
+# of o of sum_c a_oc^2: with persons as o, 1 over the harmonic mean of the
+# n_i:p in i:p (Eqs. 7.18-7.19), 1 / n~_h for h and ph and 1 / n_i+ for i:h
+# and pi:h in p x (i:h) (Eqs. 7.27 and 7.28), and 1 over the harmonic mean of
+# the n_p in p x i with missing scores (Eqs. 7.41-7.42).
 #
 # The relative-error multiplier makes sigma^2(delta) the expected variance of
-# the person means less sigma^2(p), the denominator of E rho^2 in Eq. 7.21:
-# sum_p sum_c (a_pc - abar_c)^2 / (n_p - 1), with abar_c the mean of a_pc over
-# all persons. Persons share no cell of an effect that contains p, so for such
-# an effect it equals the absolute multiplier. For an effect without p it is
-# the absolute multiplier less the mean over pairs of persons of
-# sum_c a_pc a_p'c (Eq. 7.45), and it is zero when every person has the same
-# number of scores in each cell, as in Eq. 7.29.
-.pattern_multipliers <- function(observed_design, effect_names) {
-  n_persons <- nlevels(observed_design$P)
-  person <- as.integer(observed_design$P)
-  scores_per_person <- tabulate(person, nbins = n_persons)
+# the means of the levels of o less sigma^2(o), the denominator of E rho^2 in
+# Eq. 7.21: sum_o sum_c (a_oc - abar_c)^2 / (n_o - 1), with abar_c the mean of
+# a_oc over all levels of o. Levels of o share no cell of an effect that
+# contains o, so for such an effect it equals the absolute multiplier. For an
+# effect without o it is the absolute multiplier less the mean over pairs of
+# levels of sum_c a_oc a_o'c (Eq. 7.45), and it is zero when every level has
+# the same number of scores in each cell, as in Eq. 7.29.
+.pattern_multipliers <- function(observed_design, effect_names, object_of_measurement) {
+  object_levels <- observed_design[[object_of_measurement]]
+  n_objects <- nlevels(object_levels)
+  object <- as.integer(object_levels)
+  scores_per_object <- tabulate(object, nbins = n_objects)
   absolute <- numeric(length(effect_names))
   relative <- numeric(length(effect_names))
   names(absolute) <- effect_names
@@ -179,29 +88,29 @@
 
   for (effect in effect_names) {
     facets <- .parse_effect(effect)
-    person_cells <- .cell_index(observed_design[union("P", facets)])
-    n_person_cells <- max(person_cells)
-    counts <- tabulate(person_cells, nbins = n_person_cells)
-    first_score <- match(seq_len(n_person_cells), person_cells)
-    share <- counts / scores_per_person[person[first_score]]
-    absolute[[effect]] <- sum(share^2) / n_persons
+    object_cells <- .cell_index(observed_design[union(object_of_measurement, facets)])
+    n_object_cells <- max(object_cells)
+    counts <- tabulate(object_cells, nbins = n_object_cells)
+    first_score <- match(seq_len(n_object_cells), object_cells)
+    share <- counts / scores_per_object[object[first_score]]
+    absolute[[effect]] <- sum(share^2) / n_objects
 
-    if ("P" %in% facets) {
+    if (object_of_measurement %in% facets) {
       relative[[effect]] <- absolute[[effect]]
       next
     }
     cells <- .cell_index(observed_design[facets])
     cell_of_share <- cells[first_score]
-    persons_in_cell <- tabulate(cell_of_share, nbins = max(cells))
+    objects_in_cell <- tabulate(cell_of_share, nbins = max(cells))
     first_in_cell <- match(cell_of_share, cell_of_share)
-    if (all(persons_in_cell == n_persons) && all(counts == counts[first_in_cell])) {
+    if (all(objects_in_cell == n_objects) && all(counts == counts[first_in_cell])) {
       relative[[effect]] <- 0
       next
     }
-    mean_share <- as.vector(rowsum(share, cell_of_share)) / n_persons
+    mean_share <- as.vector(rowsum(share, cell_of_share)) / n_objects
     deviation <- share - mean_share[cell_of_share]
     relative[[effect]] <- (sum(deviation^2) +
-      sum((n_persons - persons_in_cell) * mean_share^2)) / (n_persons - 1)
+      sum((n_objects - objects_in_cell) * mean_share^2)) / (n_objects - 1)
   }
 
   return(list(absolute = absolute, relative = relative))
@@ -216,15 +125,12 @@
 
 .d_mean_vcov <- function(single_obs, single_obs_vcov, multiplier) {
   component_names <- colnames(single_obs)
+  weights <- diag(multiplier[component_names], nrow = length(component_names))
+  dimnames(weights) <- list(component_names, component_names)
 
-  transform_matrix <- diag(multiplier[component_names], nrow = length(component_names))
-  dimnames(transform_matrix) <- list(component_names, component_names)
-
-  result <- transform_matrix %*%
+  result <- weights %*%
     single_obs_vcov[component_names, component_names, drop = FALSE] %*%
-    t(transform_matrix)
-
-  dimnames(result) <- list(component_names, component_names)
+    weights
   return(result)
 }
 
@@ -232,11 +138,11 @@
 # estimates, the estimated covariance of the G-study components can have a
 # negative eigenvalue, so a linear combination of them can have an estimated
 # variance below zero; its standard error is NA, as in the G study.
-.standard_errors <- function(variances) {
+.standard_errors <- function(variances, labels = names(variances)) {
   negative <- !is.na(variances) & variances < 0
   if (any(negative)) {
     warning(
-      "The estimated sampling variance of ", paste(names(variances)[negative], collapse = ", "),
+      "The estimated sampling variance of ", paste(labels[negative], collapse = ", "),
       " is below zero; its standard error is NA.",
       call. = FALSE
     )
@@ -246,69 +152,49 @@
   return(result)
 }
 
-.single_obs_vc_table <- function(single_obs, single_obs_vcov = NULL) {
-  single_obs_values <- as.numeric(single_obs)
-  names(single_obs_values) <- colnames(single_obs)
-  standard_error <- rep(NA_real_, length(single_obs_values))
-
-  if (!is.null(single_obs_vcov)) {
-    standard_error <- .standard_errors(diag(single_obs_vcov)[names(single_obs_values)])
+# A table of D-study components from their estimates, a one-row matrix, and
+# their covariance matrix, which is NULL when standard errors are unavailable.
+# Each effect has its label and the labels of the G-study components summed
+# into it.
+.component_table <- function(estimates, vcov, estimate_column, effect_labels,
+                             source_effects) {
+  effects <- colnames(estimates)
+  standard_error <- rep(NA_real_, length(effects))
+  if (!is.null(vcov)) {
+    standard_error <- .standard_errors(diag(vcov)[effects], effect_labels[effects])
   }
 
-  return(data.frame(
-    effect = names(single_obs_values),
-    single_obs_estimate = unname(single_obs_values),
-    standard_error = unname(standard_error),
+  result <- data.frame(
+    effect = effects,
+    effect_label = unname(effect_labels[effects]),
+    source_effects = unname(source_effects[effects]),
     row.names = NULL
-  ))
-}
-
-.d_mean_vc_table <- function(d_mean, d_mean_vcov = NULL) {
-  d_mean_values <- as.numeric(d_mean)
-  names(d_mean_values) <- colnames(d_mean)
-  standard_error <- rep(NA_real_, length(d_mean_values))
-
-  if (!is.null(d_mean_vcov)) {
-    standard_error <- .standard_errors(diag(d_mean_vcov)[names(d_mean_values)])
-  }
-
-  return(data.frame(
-    effect = names(d_mean_values),
-    mean_score_estimate = unname(d_mean_values),
-    standard_error = unname(standard_error),
-    row.names = NULL
-  ))
+  )
+  result[[estimate_column]] <- as.numeric(estimates)
+  result$standard_error <- unname(standard_error)
+  return(result)
 }
 
 # tau, delta, Delta, G, and Phi from the mean-score components. delta_weight
 # gives the share of each component in relative error; by default it is 1 for
 # the components with the object of measurement, other than its own, and 0
 # for the others.
-.g_coefficient <- function(d_mean, d_mean_vcov = NULL, object_of_measurement = "P",
+.g_coefficient <- function(d_mean, d_mean_vcov, object_of_measurement,
                            delta_weight = NULL) {
+  component_names <- colnames(d_mean)
   d_mean_values <- as.numeric(d_mean)
-  names(d_mean_values) <- colnames(d_mean)
-
-  has_object <- vapply(
-    names(d_mean_values),
-    function(component_name) object_of_measurement %in% .parse_effect(component_name),
-    logical(1)
-  )
-  names(has_object) <- names(d_mean_values)
-
-  tau_weight <- numeric(length(d_mean_values))
-  Delta_weight <- rep(1, length(d_mean_values))
-  names(tau_weight) <- names(d_mean_values)
-  names(Delta_weight) <- names(d_mean_values)
-  tau_weight[object_of_measurement] <- 1
-  Delta_weight[object_of_measurement] <- 0
-
+  tau_weight <- as.numeric(component_names == object_of_measurement)
+  Delta_weight <- 1 - tau_weight
   if (is.null(delta_weight)) {
-    delta_weight <- as.numeric(has_object)
-    names(delta_weight) <- names(d_mean_values)
-    delta_weight[object_of_measurement] <- 0
+    has_object <- vapply(
+      component_names,
+      function(component_name) object_of_measurement %in% .parse_effect(component_name),
+      logical(1)
+    )
+    delta_weight <- as.numeric(has_object) - tau_weight
+  } else {
+    delta_weight <- unname(delta_weight[component_names])
   }
-  delta_weight <- delta_weight[names(d_mean_values)]
 
   tau <- sum(tau_weight * d_mean_values)
   delta <- sum(delta_weight * d_mean_values)
@@ -319,7 +205,6 @@
   standard_error <- rep(NA_real_, 5)
 
   if (!is.null(d_mean_vcov)) {
-    component_names <- names(d_mean_values)
     d_mean_vcov <- d_mean_vcov[component_names, component_names, drop = FALSE]
 
     G_weight <- (delta / (tau + delta)^2) * tau_weight -

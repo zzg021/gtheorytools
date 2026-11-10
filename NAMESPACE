@@ -2,12 +2,18 @@
 
 S3method(print,d_study)
 S3method(print,d_study_comparison)
+S3method(print,d_study_comparison_general)
+S3method(print,d_study_general)
 S3method(print,d_study_selection)
 S3method(print,g_study)
+S3method(print,g_study_general)
 export(compare_d_studies)
+export(compare_d_studies_general)
 export(d_study)
+export(d_study_general)
 export(find_d_designs)
 export(g_study)
+export(g_study_general)
 importFrom(methods,new)
 importFrom(stats,
   as.formula,
@@ -16,3 +22,4 @@ importFrom(stats,
   optimHess,
   sigma
 )
+importFrom(utils,combn)

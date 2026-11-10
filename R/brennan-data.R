@@ -13,7 +13,7 @@
 #' @source Brennan, R. L. (2001). *Generalizability theory*. Springer.
 #'   Table 2.2.
 #'
-#' @seealso [g_study()]
+#' @seealso [g_study()], [g_study_general()]
 #'
 #' @examples
 #' head(brennan_p_x_i)
@@ -37,7 +37,7 @@
 #' @source Brennan, R. L. (2001). *Generalizability theory*. Springer.
 #'   Table 2.8.
 #'
-#' @seealso [g_study()]
+#' @seealso [g_study()], [g_study_general()]
 #'
 #' @examples
 #' head(brennan_i_in_p)
@@ -47,7 +47,7 @@
 #'
 #' Scores from 0 to 9 of 10 persons on 4 items on each of 2 occasions, a
 #' p x i x o design. Brennan's (2001) G study is in Table 3.3 and his
-#' D studies in Tables 4.4 (p x I x O) and 4.5 (p x (I:O)).
+#' D studies in Tables 4.4 (p x i x o) and 4.5 (p x (i:o)).
 #'
 #' @format A data frame with 80 rows and 4 variables:
 #' \describe{
@@ -60,7 +60,7 @@
 #' @source Brennan, R. L. (2001). *Generalizability theory*. Springer.
 #'   Table 3.1.
 #'
-#' @seealso [g_study()]
+#' @seealso [g_study()], [g_study_general()]
 #'
 #' @examples
 #' head(brennan_p_x_i_x_o)
@@ -85,7 +85,7 @@
 #' @source Brennan, R. L. (2001). *Generalizability theory*. Springer.
 #'   Table 3.2.
 #'
-#' @seealso [g_study()]
+#' @seealso [g_study()], [g_study_general()]
 #'
 #' @examples
 #' head(brennan_p_x_r_in_t)
@@ -108,7 +108,7 @@
 #' @source Brennan, R. L. (2001). *Generalizability theory*. Springer.
 #'   Table 7.2.
 #'
-#' @seealso [g_study()], [d_study()]
+#' @seealso [g_study()], [d_study()], [g_study_general()]
 #'
 #' @examples
 #' table(brennan_i_in_p_unbalanced$p)
@@ -132,7 +132,7 @@
 #' @source Brennan, R. L. (2001). *Generalizability theory*. Springer.
 #'   Table 7.5.
 #'
-#' @seealso [g_study()], [d_study()]
+#' @seealso [g_study()], [d_study()], [g_study_general()]
 #'
 #' @examples
 #' head(brennan_p_x_i_in_h_unbalanced, 8)
@@ -148,14 +148,13 @@
 #' \describe{
 #'   \item{p}{Person, 1 to 12.}
 #'   \item{i}{Item, 1 to 6.}
-#'   \item{score}{Item score, 0 or 1; `NA` for the 13 items a person did not
-#'     take.}
+#'   \item{score}{Item score, 0 or 1; `NA` for the 13 missing scores.}
 #' }
 #'
 #' @source Brennan, R. L. (2001). *Generalizability theory*. Springer.
 #'   Table 7.7, from Huynh (1977).
 #'
-#' @seealso [g_study()], [d_study()]
+#' @seealso [g_study()], [d_study()], [g_study_general()]
 #'
 #' @examples
 #' tapply(!is.na(brennan_p_x_i_missing$score), brennan_p_x_i_missing$p, sum)

@@ -9,8 +9,7 @@ A data frame with 72 rows and 3 variables:
 \describe{
 \item{p}{Person, 1 to 12.}
 \item{i}{Item, 1 to 6.}
-\item{score}{Item score, 0 or 1; \code{NA} for the 13 items a person did not
-take.}
+\item{score}{Item score, 0 or 1; \code{NA} for the 13 missing scores.}
 }
 }
 \source{
@@ -29,6 +28,6 @@ and his D study in Section 7.2.4.
 tapply(!is.na(brennan_p_x_i_missing$score), brennan_p_x_i_missing$p, sum)
 }
 \seealso{
-\code{\link[=g_study]{g_study()}}, \code{\link[=d_study]{d_study()}}
+\code{\link[=g_study]{g_study()}}, \code{\link[=d_study]{d_study()}}, \code{\link[=g_study_general]{g_study_general()}}
 }
 \keyword{datasets}

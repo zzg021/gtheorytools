@@ -135,7 +135,7 @@
 # (Eq. 6.1). For unbalanced data the analogous mean squares are correlated, and
 # the covariance is estimated from all of them together. An estimated
 # sampling variance below zero gives that component an NA standard error.
-.anova_components <- function(anova_table, ems_coefficients, dat, balanced) {
+.anova_components <- function(anova_table, ems_coefficients, dat, balanced, effect_labels) {
   effects <- anova_table$effect
   mean_squares <- anova_table$mean_square
   ms_weights <- solve(ems_coefficients)
@@ -152,7 +152,8 @@
     negative <- diag(vcov) < 0
     if (any(negative)) {
       warning(
-        "The estimated sampling variance of ", paste(effects[negative], collapse = ", "),
+        "The estimated sampling variance of ",
+        paste(effect_labels[negative], collapse = ", "),
         " is below zero; its standard error is NA.",
         call. = FALSE
       )

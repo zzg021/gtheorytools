@@ -21,15 +21,25 @@ navbar:
       href: index.html#quick-start
 
 reference:
-  - title: G studies
-    desc: Estimate variance components for crossed and nested designs.
+  - title: One- and two-facet designs
+    desc: >
+      Estimate variance components for designs named by keyword, with persons
+      as the object of measurement, and compute and compare D studies.
     contents:
       - g_study
-  - title: D studies and study planning
-    desc: Compute coefficients, compare sample sizes, and select candidate designs.
-    contents:
       - d_study
       - compare_d_studies
+  - title: Designs written as design strings
+    desc: >
+      The same steps for any number of crossed and nested facets and any
+      object of measurement.
+    contents:
+      - g_study_general
+      - d_study_general
+      - compare_d_studies_general
+  - title: Study planning
+    desc: Select candidate designs that meet a coefficient target.
+    contents:
       - find_d_designs
   - title: Example data
     desc: Synthetic data sets from Brennan (2001).

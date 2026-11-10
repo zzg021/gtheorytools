@@ -1,133 +1,109 @@
-# The components of the chosen design and the columns mapped to P, F1, and F2.
-.build_g_study_design <- function(score_column, p, f1, f2 = NULL, design) {
-  .check_single_string(score_column, "score_column")
-  .check_single_string(p, "p")
-  .check_single_string(f1, "f1")
-  .check_single_string(design, "design")
-
-  one_facet_designs <- c("crossed", "nested")
-  two_facet_designs <- c("fully_crossed", "partially_nested", "fully_nested")
-
-  if (is.null(f2)) {
-    if (!(design %in% one_facet_designs)) {
-      stop(
-        "For one-facet G-studies with f2 = NULL, design must be one of: crossed, nested.",
-        call. = FALSE
-      )
-    }
-
-    design_specs <- list(
-      crossed = list(
-        label = "One-facet crossed G-study: P x F1",
-        random_effects = c("P", "F1"),
-        residual_effect = "PxF1",
-        n_facets = 1L
-      ),
-      nested = list(
-        label = "One-facet nested G-study: F1:P",
-        random_effects = c("P"),
-        residual_effect = "F1:P",
-        n_facets = 1L
-      )
-    )
-
-    result <- design_specs[[design]]
-    result$g_design <- design
-    result$score_column <- score_column
-    result$facet_columns <- c(P = p, F1 = f1)
+# The facet columns of a design: `facets` maps each facet symbol to a data
+# column, and NULL uses the symbols as the column names.
+.resolve_facet_columns <- function(facets, symbols) {
+  if (is.null(facets)) {
+    result <- symbols
+    names(result) <- symbols
     return(result)
   }
 
-  .check_single_string(f2, "f2")
-
-  if (!(design %in% two_facet_designs)) {
+  if (!is.character(facets) || is.null(names(facets)) || anyNA(facets) ||
+      length(facets) != length(symbols) ||
+      !setequal(names(facets), symbols)) {
     stop(
-      "For two-facet G-studies, design must be one of: ",
-      "fully_crossed, partially_nested, fully_nested.",
+      "facets must be a named character vector that maps each facet symbol of ",
+      "the design (", paste(symbols, collapse = ", "), ") to a data column, ",
+      "such as c(", symbols[[1]], " = \"", symbols[[1]], "_column\").",
+      .case_note(names(facets), symbols),
+      call. = FALSE
+    )
+  }
+  if (anyDuplicated(facets) > 0) {
+    stop("facets maps two facet symbols to the same data column.", call. = FALSE)
+  }
+
+  return(facets[symbols])
+}
+
+# The effects of the design, the columns of its facets, and the lmer term of
+# each effect: the interaction of its facets. `model_names` names the facets
+# in the lmer model, by default their symbols.
+.build_g_study_design <- function(design, facets, score_column, model_names = NULL) {
+  .check_single_string(score_column, "score_column")
+  parsed <- .parse_design(design, "design")
+  if (length(parsed$facets) < 2) {
+    stop(
+      "design must have at least two facets, such as \"p x i\": the residual ",
+      "is the interaction of all of them.",
       call. = FALSE
     )
   }
 
-  # In the nested designs F2 is nested within F1.
-  design_specs <- list(
-    fully_crossed = list(
-      label = "Two-facet fully crossed G-study: P x F1 x F2",
-      random_effects = c("P", "F1", "F2", "PxF1", "PxF2", "F1xF2"),
-      residual_effect = "PxF1xF2",
-      n_facets = 2L
-    ),
-    partially_nested = list(
-      label = "Two-facet partially nested G-study: P x F1 x (F2:F1)",
-      random_effects = c("P", "F1", "PxF1", "F2:F1"),
-      residual_effect = "F2:F1xP",
-      n_facets = 2L
-    ),
-    fully_nested = list(
-      label = "Two-facet fully nested G-study: F2:F1:P",
-      random_effects = c("P", "F1:P"),
-      residual_effect = "F2:F1:P",
-      n_facets = 2L
-    )
+  if (is.null(model_names)) {
+    model_names <- parsed$facets
+    names(model_names) <- parsed$facets
+  }
+  effects <- .design_effects(parsed$parents)
+  effect_names <- names(effects)
+  n_effects <- length(effect_names)
+  lmer_terms <- vapply(
+    effects,
+    function(members) paste(model_names[members], collapse = ":"),
+    character(1)
   )
 
-  result <- design_specs[[design]]
-  result$g_design <- design
-  result$score_column <- score_column
-  result$facet_columns <- c(P = p, F1 = f1, F2 = f2)
-  return(result)
+  return(list(
+    g_design = parsed$design,
+    parents = parsed$parents,
+    random_effects = effect_names[-n_effects],
+    residual_effect = effect_names[[n_effects]],
+    lmer_terms = lmer_terms,
+    model_names = model_names[parsed$facets],
+    score_column = score_column,
+    facet_columns = .resolve_facet_columns(facets, parsed$facets)
+  ))
 }
 
-# Resolve `fixed` to F1 or F2 and check that the design supports it.
-.resolve_fixed_facet <- function(fixed, design) {
+# Check `fixed`, the symbols of nonnested facets fixed in the universe of
+# admissible observations, and return them in the order of the design.
+.resolve_fixed_facets <- function(fixed, design) {
   if (is.null(fixed)) {
-    return(NULL)
+    return(character(0))
   }
 
-  .check_single_string(fixed, "fixed")
-  facet <- names(design$facet_columns)[design$facet_columns == fixed]
-  if (length(facet) != 1 || facet == "P") {
-    stop("fixed must name the f1 or f2 column.", call. = FALSE)
+  facets <- names(design$parents)
+  if (!is.character(fixed) || anyNA(fixed) || !all(fixed %in% facets)) {
+    stop(
+      "fixed must contain facet symbols of the design: ",
+      paste(facets, collapse = ", "), ".",
+      .case_note(fixed, facets),
+      call. = FALSE
+    )
   }
 
-  if (design$g_design == "fully_crossed") {
-    return(facet)
-  }
-  if (design$g_design == "partially_nested") {
-    if (facet == "F2") {
+  for (facet in fixed) {
+    parents <- design$parents[[facet]]
+    if (length(parents) > 0) {
       stop(
-        "In the partially nested design only f1 can be fixed: the levels of ",
-        fixed, " differ across the levels of ", design$facet_columns[["F1"]], ".",
+        facet, " is nested within ", paste(parents, collapse = " and "),
+        ", so its conditions differ across the levels of ",
+        paste(parents, collapse = " and "), ". Only a nonnested facet can be fixed.",
         call. = FALSE
       )
     }
-    return(facet)
   }
-  if (design$g_design == "crossed") {
+
+  fixed_facets <- facets[facets %in% fixed]
+  fixed_effects <- .effects_within(design$random_effects, fixed_facets)
+  if (length(fixed_effects) == length(design$random_effects)) {
     stop(
-      "fixed is not available for the crossed design: fixing its only facet ",
-      "leaves no random facet.",
+      "With ", paste(fixed_facets, collapse = " and "), " fixed, every effect ",
+      "other than the residual is a fixed effect, and the model needs at least ",
+      "one random effect besides the residual.",
       call. = FALSE
     )
   }
-
-  stop(
-    "fixed is not available for the ", design$g_design, " design: a facet nested ",
-    "within persons has no common set of conditions.",
-    call. = FALSE
-  )
-}
-
-# The facets each facet is nested within, outermost first.
-.nesting_parents <- function(g_design) {
-  result <- switch(
-    g_design,
-    crossed = list(F1 = character(0)),
-    nested = list(F1 = "P"),
-    fully_crossed = list(F1 = character(0), F2 = character(0)),
-    partially_nested = list(F1 = character(0), F2 = "F1"),
-    fully_nested = list(F1 = "P", F2 = c("P", "F1"))
-  )
-  return(result)
+  return(fixed_facets)
 }
 
 # The cell of each score among the observed combinations of levels of the
@@ -144,8 +120,9 @@
   return(result)
 }
 
-# The number of levels of a facet in each cell of its parents among the
-# observed scores, or its number of levels when it is not nested.
+# The number of levels of a facet in each cell of the facets it is nested
+# within among the observed scores or, for a nonnested facet, its number of
+# levels.
 .levels_per_parent_cell <- function(observed_design, facet, parent_columns) {
   if (length(parent_columns) == 0) {
     return(nlevels(observed_design[[facet]]))
@@ -160,9 +137,9 @@
 }
 
 # G-study sample size of each facet: its number of levels, or for a nested
-# facet its number of levels in each level of the parent (NA if that varies).
-.g_study_sample_sizes <- function(observed_design, g_design) {
-  parents <- .nesting_parents(g_design)
+# facet its number of levels in each combination of levels of the facets it
+# is nested within (NA if that varies).
+.g_study_sample_sizes <- function(observed_design, parents) {
   result <- vapply(
     names(parents),
     function(facet) {
@@ -176,64 +153,76 @@
   return(result)
 }
 
+# The number of cells of the design among the observed conditions: the
+# combinations of levels in which each facet has a level observed within the
+# levels of the facets it is nested within. Facets linked by nesting are
+# joined on the facets they share, and the groups so formed are crossed.
+.n_design_cells <- function(observed_design, parents) {
+  facets <- names(parents)
+  group <- seq_along(facets)
+  names(group) <- facets
+  for (facet in facets) {
+    linked <- c(facet, parents[[facet]])
+    group[group %in% group[linked]] <- min(group[linked])
+  }
+
+  result <- 1
+  for (group_id in unique(group)) {
+    cells <- NULL
+    for (facet in facets[group == group_id]) {
+      observed_cells <- unique(observed_design[c(facet, parents[[facet]])])
+      cells <- if (is.null(cells)) observed_cells else merge(cells, observed_cells)
+    }
+    result <- result * nrow(cells)
+  }
+  return(result)
+}
+
 # The sample sizes of the observed scores as printed lines: the number of
-# persons, the number of levels of each facet (a range for a nested facet with
-# unequal numbers), and, for designs with a facet crossed with persons, the
-# number of scores observed out of the complete design and per person.
-.sample_size_lines <- function(observed_design, g_design, facet_columns) {
-  parents <- .nesting_parents(g_design)
-  parts <- paste(facet_columns[["P"]], nlevels(observed_design$P))
+# levels of each facet, per level of the facets it is nested within (a range
+# for unequal numbers), and, with missing scores, the number of scores
+# observed out of the cells of the design.
+.sample_size_lines <- function(observed_design, parents, facet_columns) {
+  parts <- character(0)
   for (facet in names(parents)) {
     counts <- .levels_per_parent_cell(observed_design, facet, parents[[facet]])
-    effect_name <- paste(c(facet, rev(parents[[facet]])), collapse = ":")
     size <- if (min(counts) == max(counts)) {
       min(counts)
     } else {
       paste(min(counts), "to", max(counts))
     }
+    effect_name <- .effect_name(c(facet, parents[[facet]]), parents)
     parts <- c(parts, paste(.effect_label(effect_name, facet_columns), size))
   }
   result <- paste0("Sample sizes: ", paste(parts, collapse = "; "))
 
-  if (g_design %in% c("crossed", "fully_crossed", "partially_nested")) {
-    condition_columns <- setdiff(names(facet_columns), "P")
-    n_conditions <- max(.cell_index(observed_design[condition_columns]))
-    n_complete <- nlevels(observed_design$P) * n_conditions
-    if (nrow(observed_design) < n_complete) {
-      scores_per_person <- tabulate(observed_design$P, nbins = nlevels(observed_design$P))
-      result <- c(
-        result,
-        paste0(
-          "Observed scores: ", nrow(observed_design), " of ", n_complete, ", ",
-          min(scores_per_person), " to ", max(scores_per_person), " per person"
-        )
-      )
-    }
+  n_cells <- .n_design_cells(observed_design, parents)
+  if (nrow(observed_design) < n_cells) {
+    result <- c(
+      result,
+      paste0("Observed scores: ", nrow(observed_design), " of ", n_cells)
+    )
   }
-
   return(result)
 }
 
-# One non-missing score in every cell, with the same number of nested
-# conditions in each level of their parent.
-.is_balanced <- function(dat_for_lmer, sample_sizes) {
-  n_persons <- length(unique(dat_for_lmer$P))
-  expected_rows <- n_persons * prod(sample_sizes)
-  result <- !anyNA(sample_sizes) && !anyNA(dat_for_lmer$score) &&
-    nrow(dat_for_lmer) == expected_rows
+# One non-missing score in every cell, with the same number of levels of each
+# nested facet in every cell of the facets it is nested within.
+.is_balanced <- function(observed_design, sample_sizes) {
+  result <- !anyNA(sample_sizes) && nrow(observed_design) == prod(sample_sizes)
   return(result)
 }
 
-# A fixed facet requires balanced data. Brennan's (2001) Eq. 3.34, used below
-# to report the components with the facet fixed, rests on the expected mean
-# squares of balanced designs, and unequal numbers within a fixed facet make a
-# multivariate design (Sec. 9.1).
-.check_fixed_facet_data <- function(dat_for_lmer, sample_sizes, fixed) {
-  if (!.is_balanced(dat_for_lmer, sample_sizes)) {
+# A fixed facet requires one non-missing score in every cell of a balanced
+# design. Brennan's (2001) Eq. 3.34, used below to report the components with
+# the facets fixed, rests on the expected mean squares of balanced designs, and
+# unequal numbers within a fixed facet make a multivariate design (Sec. 9.1).
+.check_fixed_facet_data <- function(dat_for_lmer, balanced) {
+  if (!balanced || anyNA(dat_for_lmer$score)) {
     stop(
-      "fixed = \"", fixed, "\" requires complete, balanced data: one non-missing ",
-      "score for every person in every condition, with the same number of nested ",
-      "conditions in each level of their parent. Unequal numbers within a fixed ",
+      "fixed requires complete, balanced data: one non-missing ",
+      "score in every cell of the design, with the same number of nested ",
+      "conditions in each level of their parents. Unequal numbers within a fixed ",
       "facet call for a multivariate design.",
       call. = FALSE
     )
@@ -241,12 +230,13 @@
   return(invisible(NULL))
 }
 
-# Components for the universe of admissible observations with facet F fixed
-# (Brennan Eq. 3.34): sigma^2(A | M) is sigma^2_A plus, when A does not contain
-# F, the component of the effect that adds F to A divided by n_F. The
-# covariance is W V W', where W holds these weights. The main effect of F is a
-# quadratic form of fixed effects, so W has no row for it.
-.mixed_model_components <- function(components, fixed_facet, n_fixed) {
+# Components for the universe of admissible observations with the facets in M
+# fixed (Brennan Eq. 3.34): sigma^2(A | M) sums sigma^2_S over the effects S
+# that add facets of M to A, each divided by the product of n over the added
+# facets. The covariance is W V W', where W holds these weights. The effects
+# whose facets are all in M are quadratic forms of fixed effects, so W has no
+# rows for them.
+.mixed_model_components <- function(components, fixed_facets, sample_sizes) {
   fitted_effects <- names(components$vc)
   weights <- matrix(
     0,
@@ -263,10 +253,8 @@
         next
       }
       extra_facets <- setdiff(source_facets, target_facets)
-      if (length(extra_facets) == 0) {
-        weights[target, source] <- 1
-      } else if (identical(extra_facets, fixed_facet)) {
-        weights[target, source] <- 1 / n_fixed
+      if (all(extra_facets %in% fixed_facets)) {
+        weights[target, source] <- 1 / prod(sample_sizes[extra_facets])
       }
     }
   }
@@ -299,14 +287,27 @@
   return(list(vc = vc, se = se, vcov = vcov))
 }
 
-# Rename the design columns to score, P, F1, and F2, with the facets as factors.
+# Rename the design columns to score and the facet symbols, with the facets as
+# factors.
 .prepare_g_study_data <- function(data, design) {
   needed_columns <- c(design$score_column, unname(design$facet_columns))
 
   if (!all(needed_columns %in% names(data))) {
     missing_columns <- needed_columns[!(needed_columns %in% names(data))]
+    # Without `facets`, each facet symbol is the name of a column.
+    facets_hint <- ""
+    missing_symbols <- intersect(missing_columns, names(design$facet_columns))
+    if (all(design$facet_columns == names(design$facet_columns)) &&
+        length(missing_symbols) > 0) {
+      facets_hint <- paste0(
+        ". Each facet symbol of the design is the name of a data column unless ",
+        "facets maps it to another column, such as facets = c(",
+        missing_symbols[[1]], " = \"", missing_symbols[[1]], "_column\")"
+      )
+    }
     stop(
       "These columns are missing from data: ", paste(missing_columns, collapse = ", "),
+      facets_hint, ".", .case_note(missing_columns, names(data)),
       call. = FALSE
     )
   }
@@ -336,69 +337,88 @@
   return(result)
 }
 
-#' Generalizability (G) Study
+#' Generalizability (G) Study from a Design String
 #'
-#' Estimates the variance components of a one- or two-facet G study, with
-#' persons as the object of measurement, by REML with [lme4::lmer()] or from
-#' the ANOVA expected mean squares.
+#' Estimates the variance components of a G study with any number of crossed
+#' and nested facets, written as a design string, by REML with [lme4::lmer()]
+#' or from the ANOVA expected mean squares.
 #'
-#' @param data A data frame in long format, with one row per score and one
-#'   score per design cell. Missing scores are dropped.
+#' @param data A data frame in long format, with one row per score and no
+#'   replicated design cells. Missing scores are dropped.
+#' @param design The design, written with one-letter facet symbols, `x` for
+#'   crossing, `:` for nesting, and parentheses, such as `"p x i"`, `"i:p"`,
+#'   or `"p x (r:t)"` (see Details).
+#' @param facets A named character vector that maps each facet symbol to a
+#'   data column, such as `c(p = "person", i = "item")`. The default, `NULL`,
+#'   uses the symbols as the column names.
 #' @param score_column Name of the score column.
-#' @param p Name of the person (object of measurement) column.
-#' @param f1,f2 Names of the facet columns. `f2 = NULL` gives a one-facet
-#'   design. In the nested designs `f2` is nested within `f1`.
-#' @param design One of `"crossed"` or `"nested"` for one facet, and
-#'   `"fully_crossed"`, `"partially_nested"`, or `"fully_nested"` for two
-#'   facets (see Details).
-#' @param fixed Optional name of the `f1` or `f2` column of a facet fixed in
-#'   the universe of admissible observations. `fully_crossed` allows either
-#'   facet and `partially_nested` only `f1`. Requires complete, balanced data.
+#' @param fixed Optional symbols of nonnested facets fixed in the universe of
+#'   admissible observations, such as `"t"` or `c("b", "c")`. Requires
+#'   complete, balanced data.
 #' @param method `"reml"` for a random-intercept linear mixed model fitted by
 #'   REML, with standard errors from the observed information, or `"anova"`
-#'   for estimates from the expected mean squares (see Details).
+#'   for estimates from the expected mean squares (see ANOVA estimates).
 #'
 #' @details
-#' P, F1, and F2 correspond to the columns named by `p`, `f1`, and `f2`.
-#' In the design notation, `x` denotes crossing and `F2:F1` means F2 is
-#' nested within F1. The last component listed is the residual.
+#' In `design`, `A:B` nests every facet of A within every facet of B, and a
+#' chain `i:h:g` nests i within h and h within g; the other pairs of facets
+#' are crossed. A symbol may appear more than once and denotes the same facet
+#' each time: in `"p x (a:b) x (c:d:b)"`, a and d are nested within b. Symbols
+#' are letters other than x and X, which both mean crossing, and their case
+#' matters, as in the column names: `"P X I"` uses the columns `P` and `I`.
+#' The other arguments name facets by the same symbols.
 #'
-#' | `design` | Design | Components |
-#' |---|---|---|
-#' | `crossed` | P x F1 | P, F1, PxF1 |
-#' | `nested` | F1:P | P, F1:P |
-#' | `fully_crossed` | P x F1 x F2 | P, F1, F2, PxF1, PxF2, F1xF2, PxF1xF2 |
-#' | `partially_nested` | P x (F2:F1) | P, F1, PxF1, F2:F1, F2:F1xP |
-#' | `fully_nested` | F2:F1:P | P, F1:P, F2:F1:P |
+#' The components are those of the design's effects (Brennan, 2001, Sec. 3.2),
+#' named in Brennan's notation: the primary indices, then the nesting indices
+#' of each level after a colon, each level in the order of the facets in
+#' `design`. The last component is the residual, which combines the
+#' highest-order interaction and error.
 #'
-#' A facet declared with `fixed` keeps its observed conditions in every
-#' D study. To fix a facet only in the D study, leave it random here and
-#' set its sample size equal to its universe size in [d_study()].
+#' | `design` | Components |
+#' |---|---|
+#' | `"p x i"` | p, i, pi |
+#' | `"i:p"` | p, i:p |
+#' | `"p x i x o"` | p, i, o, pi, po, io, pio |
+#' | `"p x (r:t)"` | p, t, r:t, pt, pr:t |
+#' | `"r:t:p"` | p, t:p, r:t:p |
+#' | `"(i:p) x o"` | p, o, i:p, po, io:p |
 #'
+#' The object of measurement is chosen in [d_study_general()], so one G study serves
+#' any nonnested random facet as the object of measurement.
+#'
+#' The effects whose facets are all declared in `fixed` enter the model as
+#' fixed effects, and the reported components are those of the universe of
+#' admissible observations with these facets fixed (Brennan, 2001, Eq. 3.34).
+#' The fixed facets keep their observed conditions in every D study. To fix a
+#' facet only in the D study, leave it random here and set its sample size
+#' equal to its universe size in [d_study_general()].
+#'
+#' @section ANOVA estimates:
 #' With `method = "anova"`, the variance components solve the expected mean
 #' square equations of the random effects model (Brennan, 2001, Eqs. 3.24 and
-#' 3.25). For unbalanced data, with missing scores or different numbers of
+#' 3.25). For unbalanced data, with missing scores or unequal numbers of
 #' nested conditions, the sums of squares and expected mean squares are the
-#' analogous ones of Henderson's Method 1 (Sec. 7.1.1), as in urGENOVA. For
-#' balanced data, the standard errors and covariance matrix follow Brennan's
-#' Eq. 6.1, which divides each squared mean square by its degrees of freedom
-#' plus 2, as GENOVA does. For unbalanced data, they are the unbiased
-#' estimates, under normality, of the covariances of the estimates. Estimates
-#' below zero are set to zero, leaving the other estimates unchanged
-#' (Sec. 3.4.6). With `fixed`, Eq. 3.34 is applied to the estimates before
-#' that step. For balanced data with no estimate below zero, the two methods
-#' give the same estimates, and the REML standard errors correspond to df in
-#' place of df + 2.
+#' analogous ones of Henderson's Method 1 (Sec. 7.1.1), as in urGENOVA.
+#' Estimates below zero are set to zero, leaving the other estimates unchanged
+#' (Sec. 3.4.6); with `fixed`, Eq. 3.34 is applied before that step. The
+#' sampling variances and covariances of the estimates are estimated without
+#' bias under normality, which for balanced data is Brennan's Eq. 6.1, with
+#' df + 2, as in GENOVA. A component whose estimated sampling variance is
+#' below zero has an `NA` standard error. For balanced data with every
+#' estimate above zero, REML gives the same estimates, with standard errors
+#' larger by a factor of up to sqrt((df + 2) / df).
 #'
-#' @returns An object of class `g_study`, a list with the following elements:
+#' @returns An object of class `g_study_general`, a list with the following
+#'   elements:
 #' \describe{
 #'   \item{\code{variance_components}}{A data frame of reported variance
 #'     components and standard errors, with effect labels built from the
-#'     data's column names. With `fixed`, these are components for the universe
-#'     with that facet fixed; the fixed facet's main-effect row is `NA`.}
+#'     data's column names. With `fixed`, the rows of the effects whose facets
+#'     are all fixed are `NA`.}
 #'   \item{\code{variance_component}, \code{variance_component_se},
 #'     \code{variance_component_vcov}}{The fitted variance components,
-#'     their standard errors, and the covariance matrix used by [d_study()].}
+#'     their standard errors, and the covariance matrix used by
+#'     [d_study_general()].}
 #'   \item{\code{method}}{The estimation method.}
 #'   \item{\code{anova_table}}{With `method = "anova"`, a data frame of
 #'     degrees of freedom, T terms (Brennan, 2001, Eq. 7.1), sums of squares,
@@ -410,67 +430,74 @@
 #'   \item{\code{fit}}{The fitted `lmer` model.}
 #'   \item{\code{fit_diagnostics}}{Singularity and convergence information,
 #'     with messages and warnings from `lmer`.}
-#'   \item{Design information}{\code{g_design}, \code{design_label},
-#'     \code{formula}, \code{n_facets}, \code{facet_columns},
-#'     \code{fixed_facet}, and \code{sample_sizes}, which is `NA` for a
-#'     nested facet with unequal numbers of conditions.}
-#'   \item{\code{observed_design}}{The P, F1, and F2 columns of the observed
-#'     scores, the pattern used by [d_study()] for unbalanced data.}
+#'   \item{Design information}{\code{g_design}, the design string;
+#'     \code{parents}, the facets each facet is nested within;
+#'     \code{facet_columns}, \code{formula}, \code{fixed_facets}, and
+#'     \code{sample_sizes}, the G-study n of each facet (for a nested facet,
+#'     per level of its parents; `NA` if that varies).}
+#'   \item{\code{observed_design}}{The facet columns of the observed scores,
+#'     the pattern used by [d_study_general()] for unbalanced data.}
 #'   \item{\code{balanced}}{Whether every cell holds one score and each nested
-#'     facet has the same number of conditions in every level of its parent.}
+#'     facet has the same number of levels in every cell of the facets it is
+#'     nested within.}
 #' }
 #' Elements for the other method are `NULL`.
 #'
 #' @references
 #' Brennan, R. L. (2001). *Generalizability theory*. Springer.
 #'
-#' @seealso [d_study()]
+#' @seealso [d_study_general()]; [g_study()] for the one- and two-facet
+#'   designs named by keyword.
 #'
 #' @examples
 #' # p x i (Brennan, 2001, Table 2.3).
-#' g_study(brennan_p_x_i, p = "p", f1 = "i", design = "crossed")
+#' g_study_general(brennan_p_x_i, design = "p x i")
 #'
 #' # i:p, a different set of items for each person (Table 2.9).
-#' g_study(brennan_i_in_p, p = "p", f1 = "i", design = "nested")
+#' g_study_general(brennan_i_in_p, design = "i:p")
 #'
 #' # p x i x o (Table 3.3).
-#' g_study(brennan_p_x_i_x_o, p = "p", f1 = "i", f2 = "o", design = "fully_crossed")
+#' g_study_general(brennan_p_x_i_x_o, design = "p x i x o")
 #'
 #' # p x (r:t), raters nested within tasks (Table 3.4).
-#' g_study(brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested")
+#' g_study_general(brennan_p_x_r_in_t, design = "p x (r:t)")
 #'
-#' # The same data with tasks fixed in the universe of admissible observations
-#' # (Appendix F).
-#' g_study(
-#'   brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested",
-#'   fixed = "t"
+#' # The same data with other column names, mapped to the facet symbols.
+#' ratings <- brennan_p_x_r_in_t
+#' names(ratings) <- c("person", "task", "rater", "rating")
+#' g_study_general(
+#'   ratings, design = "p x (r:t)",
+#'   facets = c(p = "person", r = "rater", t = "task"), score_column = "rating"
 #' )
+#'
+#' # Tasks fixed in the universe of admissible observations (Appendix F).
+#' g_study_general(brennan_p_x_r_in_t, design = "p x (r:t)", fixed = "t")
 #'
 #' # ANOVA estimates, with GENOVA's standard errors (Appendix F).
-#' g_study(
-#'   brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested",
-#'   method = "anova"
-#' )
+#' g_study_general(brennan_p_x_r_in_t, design = "p x (r:t)", method = "anova")
 #'
 #' # p x (i:h) with 2, 4, and 2 items in the levels of h (Table 7.5), and
 #' # the analogous ANOVA estimates (Sec. 7.1.3).
-#' g_study(
-#'   brennan_p_x_i_in_h_unbalanced, p = "p", f1 = "h", f2 = "i",
-#'   design = "partially_nested", method = "anova"
-#' )
+#' g_study_general(brennan_p_x_i_in_h_unbalanced, design = "p x (i:h)", method = "anova")
 #'
 #' @export
-g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
-                    fixed = NULL, method = c("reml", "anova")) {
+g_study_general <- function(data, design, facets = NULL, score_column = "score",
+                            fixed = NULL, method = c("reml", "anova")) {
   method <- match.arg(method)
-  design <- .build_g_study_design(score_column, p, f1, f2, design)
-  fixed_facet <- .resolve_fixed_facet(fixed, design)
+  return(.fit_g_study(data, design, facets, score_column, fixed, method))
+}
+
+# The G study of g_study_general(). g_study() also gives `model_names`.
+.fit_g_study <- function(data, design, facets, score_column, fixed, method,
+                         model_names = NULL) {
+  design <- .build_g_study_design(design, facets, score_column, model_names)
+  fixed_facets <- .resolve_fixed_facets(fixed, design)
   dat_for_lmer <- .prepare_g_study_data(data, design)
   observed <- dat_for_lmer[!is.na(dat_for_lmer$score), ]
-  observed_design <- droplevels(observed[names(design$facet_columns)])
+  observed_design <- droplevels(observed[names(design$parents)])
   rownames(observed_design) <- NULL
-  sample_sizes <- .g_study_sample_sizes(observed_design, design$g_design)
-  balanced <- .is_balanced(observed, sample_sizes)
+  sample_sizes <- .g_study_sample_sizes(observed_design, design$parents)
+  balanced <- .is_balanced(observed_design, sample_sizes)
   effect_names <- c(design$random_effects, design$residual_effect)
   effect_labels <- vapply(
     effect_names,
@@ -480,12 +507,12 @@ g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
     USE.NAMES = FALSE
   )
 
-  # A facet fixed in the G study has no variance component for its main
-  # effect, which REML fits as a fixed effect; its interactions and the
-  # effects nested in it stay random.
-  if (!is.null(fixed_facet)) {
-    .check_fixed_facet_data(dat_for_lmer, sample_sizes, fixed)
-    design$random_effects <- setdiff(design$random_effects, fixed_facet)
+  # The effects whose facets are all fixed in the G study enter the model as
+  # fixed effects; the other effects stay random.
+  fixed_effects <- .effects_within(design$random_effects, fixed_facets)
+  if (length(fixed_facets) > 0) {
+    .check_fixed_facet_data(dat_for_lmer, balanced)
+    design$random_effects <- setdiff(design$random_effects, fixed_effects)
   }
   fitted_effects <- c(design$random_effects, design$residual_effect)
 
@@ -495,8 +522,12 @@ g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
   anova_table <- NULL
   ems_coefficients <- NULL
   if (method == "reml") {
-    formula <- .lmer_formula("score", design$random_effects, fixed_facet)
-    fit_result <- .fit_lmer_with_diagnostics(formula, dat_for_lmer)
+    formula <- .lmer_formula(
+      "score", design$lmer_terms[design$random_effects], design$lmer_terms[fixed_effects]
+    )
+    model_data <- dat_for_lmer
+    names(model_data) <- c("score", unname(design$model_names[names(design$facet_columns)]))
+    fit_result <- .fit_lmer_with_diagnostics(formula, model_data)
     fit <- fit_result$fit
     fit_diagnostics <- fit_result$diagnostics
     components <- .extract_variance_components(fit, design)
@@ -504,7 +535,7 @@ g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
     anova <- .anova_table(observed, effect_names)
     .check_anova_df(anova, effect_labels)
     ems_coefficients <- .ems_coefficients(observed, effect_names, anova$df)
-    estimates <- .anova_components(anova, ems_coefficients, observed, balanced)
+    estimates <- .anova_components(anova, ems_coefficients, observed, balanced, effect_labels)
     components <- list(
       vc = estimates$vc[fitted_effects],
       se = estimates$se[fitted_effects],
@@ -520,8 +551,8 @@ g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
   }
 
   reported <- components
-  if (!is.null(fixed_facet)) {
-    reported <- .mixed_model_components(components, fixed_facet, sample_sizes[[fixed_facet]])
+  if (length(fixed_facets) > 0) {
+    reported <- .mixed_model_components(components, fixed_facets, sample_sizes)
   }
 
   # ANOVA estimates below zero are set to zero after Eq. 3.34, which uses them
@@ -540,8 +571,8 @@ g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
     row.names = NULL
   )
 
-  # variance_component holds the fitted components, the input to d_study();
-  # variance_components is the reported table.
+  # variance_component holds the fitted components, the input to
+  # d_study_general(); variance_components is the reported table.
   result <- list(
     fit = fit,
     fit_diagnostics = fit_diagnostics,
@@ -551,67 +582,82 @@ g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
     method = method,
     anova_table = anova_table,
     ems_coefficients = ems_coefficients,
-    design_label = design$label,
     formula = formula,
     g_design = design$g_design,
-    n_facets = design$n_facets,
+    parents = design$parents,
     facet_columns = design$facet_columns,
-    fixed_facet = fixed_facet,
+    fixed_facets = fixed_facets,
     sample_sizes = sample_sizes,
     observed_design = observed_design,
     balanced = balanced,
     variance_components = vc_table
   )
-  class(result) <- "g_study"
+  class(result) <- "g_study_general"
   return(result)
 }
 
 #' @export
-print.g_study <- function(x, ..., digits = 7) {
+print.g_study_general <- function(x, ..., digits = 7) {
   cat("\n")
   cat("========================================================\n")
-  cat(x$design_label, "\n", sep = "")
+  cat("G study: ", x$g_design, "\n", sep = "")
   cat("========================================================\n\n")
-  cat(.sample_size_lines(x$observed_design, x$g_design, x$facet_columns), sep = "\n")
-  cat("\n")
-  if (x$method == "reml") {
-    cat("Model formula:\n")
-    cat(paste(deparse(x$formula, width.cutoff = 500), collapse = "\n"), "\n", sep = "")
-  } else {
-    cat("ANOVA table:\n")
-    print(x$anova_table, digits = digits, row.names = FALSE)
-    cat("\n")
-    effect_labels <- x$anova_table$effect_label
-    names(effect_labels) <- x$anova_table$effect
-    .print_expected_mean_squares(x$ems_coefficients, effect_labels)
+  facets <- names(x$facet_columns)
+  if (any(unname(x$facet_columns) != facets)) {
+    facet_labels <- vapply(facets, .facet_display, character(1), facet_columns = x$facet_columns)
+    cat("Facets: ", paste(facet_labels, collapse = ", "), "\n", sep = "")
   }
+  cat(.sample_size_lines(x$observed_design, x$parents, x$facet_columns), sep = "\n")
   cat("\n")
-  if (is.null(x$fixed_facet)) {
+  .print_estimation(x, digits)
+  cat("\n")
+  if (length(x$fixed_facets) == 0) {
     cat("G-study variance components:\n")
   } else {
-    fixed <- x$facet_columns[[x$fixed_facet]]
+    fixed_labels <- paste0(x$fixed_facets, " (N = n = ", x$sample_sizes[x$fixed_facets], ")")
     cat(
-      "G-study variance components with ", fixed, " fixed (N = n = ",
-      x$sample_sizes[[x$fixed_facet]], "):\n",
+      "G-study variance components with ", paste(fixed_labels, collapse = " and "),
+      " fixed:\n",
       sep = ""
     )
   }
   print(x$variance_components, digits = digits, row.names = FALSE)
-  if (!is.null(x$fixed_facet)) {
-    cat(
-      "The ", fixed, " main effect is a fixed effect, so its row is NA.\n",
-      sep = ""
-    )
+  fixed_effects <- .effects_within(x$variance_components$effect, x$fixed_facets)
+  if (length(fixed_effects) > 0) {
+    cat("Fixed effects, whose rows are NA: ", paste(fixed_effects, collapse = ", "), "\n",
+        sep = "")
   }
+  .print_estimation_notes(x, fixed_effects)
+  return(invisible(x))
+}
+
+# The printed estimation step of a G study: the lmer formula, or the ANOVA
+# table and expected mean squares.
+.print_estimation <- function(x, digits) {
+  if (x$method == "reml") {
+    cat("Model formula:\n")
+    cat(paste(deparse(x$formula, width.cutoff = 500), collapse = "\n"), "\n", sep = "")
+    return(invisible(NULL))
+  }
+  cat("ANOVA table:\n")
+  print(x$anova_table, digits = digits, row.names = FALSE)
+  cat("\n")
+  effect_labels <- x$anova_table$effect_label
+  names(effect_labels) <- x$anova_table$effect
+  .print_expected_mean_squares(x$ems_coefficients, effect_labels)
+  return(invisible(NULL))
+}
+
+# The lmer fit diagnostics, or a note when an ANOVA estimate of a random
+# effect, one not in `fixed_effects`, is below zero.
+.print_estimation_notes <- function(x, fixed_effects) {
   if (x$method == "reml") {
     .print_lmer_fit_diagnostics(x$fit_diagnostics)
-  } else {
-    random_rows <- !(x$anova_table$effect %in% x$fixed_facet)
-    if (any(x$anova_table$estimate[random_rows] < 0)) {
-      cat(
-        "Estimates below zero are set to zero; the ANOVA table gives them as computed.\n"
-      )
-    }
+    return(invisible(NULL))
   }
-  return(invisible(x))
+  random_rows <- !(x$anova_table$effect %in% fixed_effects)
+  if (any(x$anova_table$estimate[random_rows] < 0)) {
+    cat("Estimates below zero are set to zero; the ANOVA table gives them as computed.\n")
+  }
+  return(invisible(NULL))
 }

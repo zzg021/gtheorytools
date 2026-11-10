@@ -1,7 +1,7 @@
 Package: gtheorytools
 Type: Package
 Title: Tools for Generalizability Theory
-Version: 0.1.0
+Version: 0.1.1
 Authors@R:
     c(
         person(
@@ -30,14 +30,12 @@ Authors@R:
             role = "aut"
         )
     )
-Description: Estimates the variance components of one- and two-facet
-    generalizability (G) studies with crossed or nested designs, by
-    restricted maximum likelihood or from the analysis of variance expected
-    mean squares, for balanced or unbalanced data. Computes decision (D)
-    studies with random, finite, or fixed facets. Reports standard errors
-    for variance components, error variances, and generalizability and
-    dependability coefficients. D studies can be compared across sample
-    sizes and selected by a minimum G or Phi value.
+Description: Estimates the variance components of generalizability (G)
+    studies with any number of crossed and nested facets, and computes
+    decision (D) studies with random, finite, or fixed facets. Reports standard
+    errors for variance components, error variances, and generalizability and
+    dependability coefficients. D studies can be compared across sample sizes
+    and selected by a minimum G or Phi value.
 License: GPL-3
 URL: https://zzg021.github.io/gtheorytools/,
     https://github.com/zzg021/gtheorytools
@@ -50,7 +48,8 @@ Imports:
     lme4,
     Matrix,
     methods,
-    stats
+    stats,
+    utils
 Roxygen: list(markdown = TRUE)
 NeedsCompilation: no
 Config/roxygen2/version: 8.1.1

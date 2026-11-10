@@ -6,13 +6,19 @@
 \alias{gtheorytools-package}
 \title{gtheorytools: Tools for Generalizability Theory}
 \description{
-Estimates the variance components of one- and two-facet generalizability (G) studies with crossed or nested designs, by restricted maximum likelihood or from the analysis of variance expected mean squares, for balanced or unbalanced data. Computes decision (D) studies with random, finite, or fixed facets. Reports standard errors for variance components, error variances, and generalizability and dependability coefficients. D studies can be compared across sample sizes and selected by a minimum G or Phi value.
+Estimates the variance components of generalizability (G) studies with any number of crossed and nested facets, and computes decision (D) studies with random, finite, or fixed facets. Reports standard errors for variance components, error variances, and generalizability and dependability coefficients. D studies can be compared across sample sizes and selected by a minimum G or Phi value.
 }
 \details{
 \itemize{
-\item \code{\link[=g_study]{g_study()}} estimates a one- or two-facet G study.
+\item \code{\link[=g_study]{g_study()}} fits a one- or two-facet G study named by keyword, such as
+\code{design = "partially_nested"}, with persons as the object of measurement.
 \item \code{\link[=d_study]{d_study()}} computes a D study for one set of sample sizes.
-\item \code{\link[=compare_d_studies]{compare_d_studies()}} compares D studies across combinations of facet sample sizes.
+\item \code{\link[=compare_d_studies]{compare_d_studies()}} compares D studies across combinations of facet
+sample sizes.
+\item \code{\link[=g_study_general]{g_study_general()}}, \code{\link[=d_study_general]{d_study_general()}}, and
+\code{\link[=compare_d_studies_general]{compare_d_studies_general()}} do the same for any design, written as a
+design string such as \code{"p x (r:t) x o"}, and any nonnested random facet
+as the object of measurement.
 \item \code{\link[=find_d_designs]{find_d_designs()}} selects D studies that meet a G or Phi target.
 }
 }
