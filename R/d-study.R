@@ -152,44 +152,101 @@
   ))
 }
 
+# The D study that repeats the G-study pattern of unbalanced data: its
+# mean-score multipliers and relative-error weights. Unequal numbers of
+# conditions make the finite-universe factors (1 - n'/N') differ across
+# levels, so every facet is random, and the pattern belongs to the G-study
+# design.
+.pattern_d_study <- function(prepared) {
+  g_study_result <- prepared$g_study_result
+  design <- prepared$design
+  if (design$d_design != design$g_design) {
+    stop(
+      "Without d_sizes, the D study repeats the G-study pattern of these ",
+      "unbalanced data, so d_design must be the G-study design (",
+      design$g_design, "). Give d_sizes for a balanced D study in another design.",
+      call. = FALSE
+    )
+  }
+  if (any(is.finite(prepared$universe_sizes))) {
+    stop(
+      "Without d_sizes, the D study repeats the G-study pattern of these ",
+      "unbalanced data, which requires every universe size to be Inf. Give ",
+      "d_sizes for a balanced D study with finite universes.",
+      call. = FALSE
+    )
+  }
+
+  multipliers <- .pattern_multipliers(
+    g_study_result$observed_design, names(prepared$variance_component)
+  )
+  delta_weight <- multipliers$relative / multipliers$absolute
+  delta_weight[prepared$object_of_measurement] <- 0
+  facet_status <- rep("random", length(prepared$facet_names))
+  names(facet_status) <- prepared$facet_names
+  facet_labels <- paste0(
+    g_study_result$facet_columns[prepared$facet_names], " random (G-study pattern)"
+  )
+
+  return(list(
+    multiplier = multipliers$absolute,
+    delta_weight = delta_weight,
+    facet_status = facet_status,
+    facet_labels = facet_labels
+  ))
+}
+
 # The D-study steps for one set of sizes, given the result of .prepare_d_study().
+# d_sizes = NULL repeats the G-study pattern of unbalanced data.
 .evaluate_d_study <- function(prepared, d_sizes) {
   g_study_result <- prepared$g_study_result
   universe_values <- prepared$universe_sizes
   object_of_measurement <- prepared$object_of_measurement
-  fixed_facet <- g_study_result$fixed_facet
-  if (!is.null(fixed_facet)) {
-    d_sizes <- .fill_fixed_facet_sizes(
-      d_sizes, "d_sizes", fixed_facet,
-      g_study_result$sample_sizes[[fixed_facet]],
-      g_study_result$facet_columns[[fixed_facet]]
-    )
-  }
-  d_values <- .check_d_study_sizes(universe_values, d_sizes, prepared$facet_names)
-  facet_status <- .d_facet_status(universe_values, d_values)
-  .check_fixed_facets(facet_status, d_values, g_study_result, prepared$design)
 
-  d_mean <- .d_mean_vc(
-    prepared$variance_component, prepared$single_obs, universe_values, d_values,
-    object_of_measurement
-  )
-  d_mean_cov <- NULL
-  if (!is.null(prepared$single_obs_cov)) {
-    d_mean_cov <- .d_mean_vcov(
-      prepared$variance_component,
-      prepared$single_obs,
-      prepared$single_obs_cov,
-      universe_values,
-      d_values,
+  if (is.null(d_sizes)) {
+    pattern <- .pattern_d_study(prepared)
+    d_values <- NULL
+    facet_status <- pattern$facet_status
+    facet_labels <- pattern$facet_labels
+    multiplier <- pattern$multiplier
+    delta_weight <- pattern$delta_weight
+  } else {
+    fixed_facet <- g_study_result$fixed_facet
+    if (!is.null(fixed_facet)) {
+      d_sizes <- .fill_fixed_facet_sizes(
+        d_sizes, "d_sizes", fixed_facet,
+        g_study_result$sample_sizes[[fixed_facet]],
+        g_study_result$facet_columns[[fixed_facet]]
+      )
+    }
+    d_values <- .check_d_study_sizes(universe_values, d_sizes, prepared$facet_names)
+    facet_status <- .d_facet_status(universe_values, d_values)
+    .check_fixed_facets(facet_status, d_values, g_study_result, prepared$design)
+    facet_labels <- .d_facet_labels(facet_status, universe_values, d_values, g_study_result)
+    multiplier <- .d_mean_multiplier(
+      prepared$variance_component, prepared$single_obs, universe_values, d_values,
       object_of_measurement
     )
+    delta_weight <- NULL
+  }
+
+  d_mean <- .d_mean_vc(prepared$single_obs, multiplier)
+  d_mean_cov <- NULL
+  if (!is.null(prepared$single_obs_cov)) {
+    d_mean_cov <- .d_mean_vcov(prepared$single_obs, prepared$single_obs_cov, multiplier)
   }
 
   d_mean_results <- .d_mean_vc_table(d_mean, d_mean_cov)
+  if (is.null(d_sizes)) {
+    d_mean_results$divisor <- unname(1 / multiplier[d_mean_results$effect])
+    d_mean_results$delta_weight <- unname(delta_weight[d_mean_results$effect])
+  }
   d_mean_results <- .add_effect_metadata(
     d_mean_results, prepared$effect_labels, prepared$source_effects
   )
-  coefficient_results <- .g_coefficient(d_mean, d_mean_cov, object_of_measurement)
+  coefficient_results <- .g_coefficient(
+    d_mean, d_mean_cov, object_of_measurement, delta_weight
+  )
 
   result <- list(
     g_design = prepared$design$g_design,
@@ -209,7 +266,7 @@
     universe_sizes = universe_values,
     d_sizes = d_values,
     facet_status = facet_status,
-    facet_labels = .d_facet_labels(facet_status, universe_values, d_values, g_study_result),
+    facet_labels = facet_labels,
     se_available = prepared$se_available
   )
   class(result) <- "d_study"
@@ -229,7 +286,9 @@
 #'   G study may be omitted.
 #' @param d_sizes D-study sample sizes n', whole numbers named as in
 #'   `universe_sizes`, with `1 <= n' <= N'`. For a nested facet, n' is the
-#'   number of conditions in each level of its parent.
+#'   number of conditions in each level of its parent. `NULL`, the default,
+#'   repeats the G study: its sample sizes for balanced data, and its pattern
+#'   of scores for unbalanced data (see Details).
 #' @param d_design The D-study design, one of the `design` values of
 #'   [g_study()]. Defaults to the G-study design and may be more nested.
 #' @param d_nesting `"F2:F1"` or `"F1:F2"`, required when a fully crossed
@@ -245,12 +304,25 @@
 #'   \qquad
 #'   \Phi = \frac{\sigma^2(\tau)}{\sigma^2(\tau) + \sigma^2(\Delta)}}{
 #'   G = tau / (tau + delta); Phi = tau / (tau + Delta).}
-#' G is the generalizability coefficient for relative decisions, such as
-#' ranking persons. Phi is the dependability coefficient for absolute
+#' G is for relative decisions, such as ranking persons, and Phi for absolute
 #' decisions, such as comparing scores with a cut score.
 #'
 #' A facet is random when N' is infinite, finite when `n' < N' < Inf`, and
 #' fixed in the D study when `n' = N'`.
+#'
+#' For unbalanced data, with every universe size `Inf` and `d_design` the
+#' G-study design, `d_sizes = NULL` gives the D study with the G-study
+#' pattern: the same numbers of conditions and the same missing scores, as
+#' when a new form keeps a test's unequal numbers of items per passage
+#' (Brennan, 2001, Sec. 7.2). A person's mean score weights each cell of an
+#' effect by its share of the person's scores, and each mean-score component
+#' is the variance component divided by the `divisor` column: the reciprocal
+#' of the mean, over persons, of the sum of the squared weights (Eqs. 7.18,
+#' 7.27-7.29, and 7.41). `delta_weight` gives the share of each component in
+#' relative error, for which \eqn{\sigma^2(\tau) + \sigma^2(\delta)} is the
+#' expected variance of the person mean scores. An effect without persons
+#' enters it only when persons have different patterns, as with missing
+#' scores (Eq. 7.45).
 #'
 #' @returns An object of class `d_study`, a list with the following elements:
 #' \describe{
@@ -259,7 +331,8 @@
 #'   \item{\code{single_obs_results}}{A data frame of single-observation
 #'     variance components and standard errors.}
 #'   \item{\code{d_mean_results}}{A data frame of mean-score variance
-#'     components and standard errors.}
+#'     components and standard errors, with `divisor` and `delta_weight` for
+#'     the G-study pattern of unbalanced data.}
 #'   \item{\code{d_variance_component}}{Variance components after recoding
 #'     to the D-study design.}
 #'   \item{\code{single_obs}, \code{d_mean}}{The single-observation and
@@ -267,13 +340,14 @@
 #'   \item{\code{d_variance_component_vcov}, \code{single_obs_vcov},
 #'     \code{d_mean_vcov}}{Covariance matrices for the corresponding component
 #'     estimates. `single_obs_vcov` and `d_mean_vcov` are `NULL` when
-#'     standard errors are unavailable.}
+#'     `se_available` is `FALSE`.}
 #'   \item{Design information}{\code{g_design}, \code{d_design},
 #'     \code{d_nesting}, \code{n_facets}, \code{component_mapping},
 #'     \code{universe_sizes}, \code{d_sizes}, \code{facet_status}, and
-#'     \code{facet_labels}.}
-#'   \item{\code{se_available}}{Whether the G-study covariance matrix can
-#'     be used to calculate standard errors.}
+#'     \code{facet_labels}. `d_sizes` is `NULL` for the G-study pattern of
+#'     unbalanced data.}
+#'   \item{\code{se_available}}{Whether every entry of the G-study covariance
+#'     matrix is finite, as the standard errors require.}
 #' }
 #'
 #' @references
@@ -285,6 +359,14 @@
 #' # p x I with 12 items (Brennan, 2001, Table 2.4).
 #' g_pi <- g_study(brennan_p_x_i, p = "p", f1 = "i", design = "crossed")
 #' d_study(g_pi, universe_sizes = c(F1 = Inf), d_sizes = c(F1 = 12))
+#'
+#' # p x i with missing scores (Table 7.7), and the D study that repeats the
+#' # G-study pattern (Sec. 7.2.4).
+#' g_missing <- g_study(
+#'   brennan_p_x_i_missing, p = "p", f1 = "i", design = "crossed",
+#'   method = "anova"
+#' )
+#' d_study(g_missing, universe_sizes = c(F1 = Inf))
 #'
 #' # p x I x O with 4 items and 2 occasions (Table 4.4).
 #' g_pio <- g_study(
@@ -309,9 +391,24 @@
 #' d_study(g_prt, universe_sizes = c(F1 = 3, F2 = Inf), d_sizes = c(F1 = 3, F2 = 4))
 #'
 #' @export
-d_study <- function(g_study_result, universe_sizes, d_sizes,
+d_study <- function(g_study_result, universe_sizes, d_sizes = NULL,
                     d_design = NULL, d_nesting = NULL) {
   prepared <- .prepare_d_study(g_study_result, universe_sizes, d_design, d_nesting)
+  if (is.null(d_sizes) && g_study_result$balanced) {
+    d_sizes <- g_study_result$sample_sizes
+    exceeds_universe <- d_sizes > prepared$universe_sizes[names(d_sizes)]
+    if (any(exceeds_universe)) {
+      facet <- names(d_sizes)[exceeds_universe][1]
+      stop(
+        "Without d_sizes, the D study uses the G-study sample sizes, and ",
+        g_study_result$facet_columns[[facet]], " has n = ", d_sizes[[facet]],
+        " in the G study, more than universe_sizes[\"", facet, "\"] = ",
+        prepared$universe_sizes[[facet]], ". Give d_sizes, or a universe size ",
+        "of at least ", d_sizes[[facet]], ".",
+        call. = FALSE
+      )
+    }
+  }
   return(.evaluate_d_study(prepared, d_sizes))
 }
 
@@ -326,9 +423,10 @@ print.d_study <- function(x, ..., digits = 7) {
   cat("Facets: ", paste(x$facet_labels, collapse = "; "), "\n", sep = "")
   if (!x$se_available) {
     cat("\n")
-    cat("Note: G-study standard errors are unavailable (variance component at\n")
-    cat("the zero boundary, or an unusable observed-information matrix), so\n")
-    cat("all D-study standard errors are reported as NA.\n")
+    cat("Note: G-study standard errors are unavailable (a REML variance component\n")
+    cat("at the zero boundary, an unusable observed-information matrix, or an\n")
+    cat("ANOVA sampling variance below zero), so all D-study standard errors are\n")
+    cat("reported as NA.\n")
   }
   cat("\n")
   cat("D-study single-observation variance components:\n")

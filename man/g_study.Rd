@@ -16,9 +16,8 @@ g_study(
 )
 }
 \arguments{
-\item{data}{A data frame in long format, with one row per score and no
-replicated design cells. Missing scores are dropped when \code{fixed = NULL}
-and \code{method = "reml"}.}
+\item{data}{A data frame in long format, with one row per score and one
+score per design cell. Missing scores are dropped.}
 
 \item{score_column}{Name of the score column.}
 
@@ -37,8 +36,7 @@ facet and \code{partially_nested} only \code{f1}. Requires complete, balanced da
 
 \item{method}{\code{"reml"} for a random-intercept linear mixed model fitted by
 REML, with standard errors from the observed information, or \code{"anova"}
-for estimates from the expected mean squares, which requires complete,
-balanced data (see Details).}
+for estimates from the expected mean squares (see Details).}
 }
 \value{
 An object of class \code{g_study}, a list with the following elements:
@@ -52,8 +50,9 @@ with that facet fixed; the fixed facet's main-effect row is \code{NA}.}
 their standard errors, and the covariance matrix used by \code{\link[=d_study]{d_study()}}.}
 \item{\code{method}}{The estimation method.}
 \item{\code{anova_table}}{With \code{method = "anova"}, a data frame of
-degrees of freedom, sums of squares, mean squares, and the random
-effects estimates before those below zero are set to zero.}
+degrees of freedom, T terms (Brennan, 2001, Eq. 7.1), sums of squares,
+mean squares, and the random effects estimates before those below zero
+are set to zero.}
 \item{\code{ems_coefficients}}{With \code{method = "anova"}, the matrix whose
 row alpha and column beta give the coefficient of sigma^2(beta) in the
 expected mean square of alpha.}
@@ -62,9 +61,14 @@ expected mean square of alpha.}
 with messages and warnings from \code{lmer}.}
 \item{Design information}{\code{g_design}, \code{design_label},
 \code{formula}, \code{n_facets}, \code{facet_columns},
-\code{fixed_facet}, and \code{sample_sizes}.}
+\code{fixed_facet}, and \code{sample_sizes}, which is \code{NA} for a
+nested facet with unequal numbers of conditions.}
+\item{\code{observed_design}}{The P, F1, and F2 columns of the observed
+scores, the pattern used by \code{\link[=d_study]{d_study()}} for unbalanced data.}
+\item{\code{balanced}}{Whether every cell holds one score and each nested
+facet has the same number of conditions in every level of its parent.}
 }
-Elements that do not apply to the method are \code{NULL}.
+Elements for the other method are \code{NULL}.
 }
 \description{
 Estimates the variance components of a one- or two-facet G study, with
@@ -74,13 +78,12 @@ the ANOVA expected mean squares.
 \details{
 P, F1, and F2 correspond to the columns named by \code{p}, \code{f1}, and \code{f2}.
 In the design notation, \code{x} denotes crossing and \code{F2:F1} means F2 is
-nested within F1. The last component listed is the residual, which
-combines the highest-order interaction and error.\tabular{lll}{
+nested within F1. The last component listed is the residual.\tabular{lll}{
    \code{design} \tab Design \tab Components \cr
    \code{crossed} \tab P x F1 \tab P, F1, PxF1 \cr
    \code{nested} \tab F1:P \tab P, F1:P \cr
    \code{fully_crossed} \tab P x F1 x F2 \tab P, F1, F2, PxF1, PxF2, F1xF2, PxF1xF2 \cr
-   \code{partially_nested} \tab (F2:F1) x P \tab P, F1, PxF1, F2:F1, F2:F1xP \cr
+   \code{partially_nested} \tab P x (F2:F1) \tab P, F1, PxF1, F2:F1, F2:F1xP \cr
    \code{fully_nested} \tab F2:F1:P \tab P, F1:P, F2:F1:P \cr
 }
 
@@ -91,14 +94,18 @@ set its sample size equal to its universe size in \code{\link[=d_study]{d_study(
 
 With \code{method = "anova"}, the variance components solve the expected mean
 square equations of the random effects model (Brennan, 2001, Eqs. 3.24 and
-3.25). Their standard errors and covariance matrix follow Brennan's
+3.25). For unbalanced data, with missing scores or different numbers of
+nested conditions, the sums of squares and expected mean squares are the
+analogous ones of Henderson's Method 1 (Sec. 7.1.1), as in urGENOVA. For
+balanced data, the standard errors and covariance matrix follow Brennan's
 Eq. 6.1, which divides each squared mean square by its degrees of freedom
-plus 2, as GENOVA does. Estimates below zero are set to zero, leaving the
-other estimates unchanged (Sec. 3.4.6). With \code{fixed}, Eq. 3.34 is applied
-to the estimates before that step. For balanced data with no estimate
-below zero, the two methods give the same estimates; the REML standard
-errors correspond to dividing by df rather than df + 2, so they are larger
-by a factor of up to sqrt((df + 2) / df).
+plus 2, as GENOVA does. For unbalanced data, they are the unbiased
+estimates, under normality, of the covariances of the estimates. Estimates
+below zero are set to zero, leaving the other estimates unchanged
+(Sec. 3.4.6). With \code{fixed}, Eq. 3.34 is applied to the estimates before
+that step. For balanced data with no estimate below zero, the two methods
+give the same estimates, and the REML standard errors correspond to df in
+place of df + 2.
 }
 \examples{
 # p x i (Brennan, 2001, Table 2.3).
@@ -124,6 +131,13 @@ g_study(
 g_study(
   brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested",
   method = "anova"
+)
+
+# p x (i:h) with 2, 4, and 2 items in the levels of h (Table 7.5), and
+# the analogous ANOVA estimates (Sec. 7.1.3).
+g_study(
+  brennan_p_x_i_in_h_unbalanced, p = "p", f1 = "h", f2 = "i",
+  design = "partially_nested", method = "anova"
 )
 
 }

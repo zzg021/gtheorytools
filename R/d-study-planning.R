@@ -71,8 +71,8 @@
 #'   d_sizes = list(F1 = c(4, 8, 16), F2 = c(1, 2))
 #' )
 #'
-#' # p x (R:T): only the listed numbers of tasks and raters per task, with at
-#' # most 12 ratings per person (Table 4.6).
+#' # p x (R:T): the listed numbers of tasks and raters per task, with at most
+#' # 12 ratings per person (Table 4.6).
 #' g_prt <- g_study(
 #'   brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested"
 #' )
@@ -192,8 +192,7 @@ print.d_study_comparison <- function(x, ..., digits = 7, row.names = FALSE) {
 #'
 #' @param comparison The object returned by [compare_d_studies()].
 #' @param coefficient `"G"` or `"Phi"` (see [d_study()]).
-#' @param target A number between 0 and 1. An estimate equal to the target up
-#'   to rounding error, `sqrt(.Machine$double.eps)`, qualifies.
+#' @param target A number between 0 and 1.
 #'
 #' @returns An object of class `d_study_selection`, a list with the following
 #'   elements:
@@ -202,8 +201,7 @@ print.d_study_comparison <- function(x, ..., digits = 7, row.names = FALSE) {
 #'     target, in their original order.}
 #'   \item{\code{coefficient}}{The selected coefficient, `"G"` or `"Phi"`.}
 #'   \item{\code{target}}{The minimum coefficient value.}
-#'   \item{\code{meets_target}}{Whether each D study meets the target; `NA`
-#'     when the coefficient has no finite estimate.}
+#'   \item{\code{meets_target}}{Whether each D study meets the target.}
 #'   \item{\code{comparison}}{The input comparison object.}
 #' }
 #'

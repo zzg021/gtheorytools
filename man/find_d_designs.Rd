@@ -11,8 +11,7 @@ find_d_designs(comparison, coefficient, target)
 
 \item{coefficient}{\code{"G"} or \code{"Phi"} (see \code{\link[=d_study]{d_study()}}).}
 
-\item{target}{A number between 0 and 1. An estimate equal to the target up
-to rounding error, \code{sqrt(.Machine$double.eps)}, qualifies.}
+\item{target}{A number between 0 and 1.}
 }
 \value{
 An object of class \code{d_study_selection}, a list with the following
@@ -22,8 +21,7 @@ elements:
 target, in their original order.}
 \item{\code{coefficient}}{The selected coefficient, \code{"G"} or \code{"Phi"}.}
 \item{\code{target}}{The minimum coefficient value.}
-\item{\code{meets_target}}{Whether each D study meets the target; \code{NA}
-when the coefficient has no finite estimate.}
+\item{\code{meets_target}}{Whether each D study meets the target.}
 \item{\code{comparison}}{The input comparison object.}
 }
 }

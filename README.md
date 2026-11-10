@@ -83,17 +83,22 @@ person and facets, and no replicated design cells. The score column is named
 | Two | `"partially_nested"` | `f2` nested within `f1`, crossed with persons |
 | Two | `"fully_nested"` | `f2` nested within `f1`, nested within persons |
 
-`g_study()` fits linear mixed models by REML. For complete, balanced data,
-`method = "anova"` gives the ANOVA estimates from the expected mean squares,
-with the standard errors and covariance matrix that GENOVA reports
-(Brennan, 2001, Eq. 6.1), and `fixed` fixes a facet of a fully crossed or
+`g_study()` fits linear mixed models by REML. `method = "anova"` gives the
+ANOVA estimates from the expected mean squares, with urGENOVA's analogous
+sums of squares for unbalanced data (Brennan, 2001, Sec. 7.1). Its standard
+errors are those GENOVA reports for balanced data (Eq. 6.1) and, for
+unbalanced data, unbiased normal-theory estimates that reduce to them. For
+complete, balanced data, `fixed` fixes a facet of a fully crossed or
 partially nested G study. In a D study, `universe_sizes` and `d_sizes`
 specify random, finite, or fixed facets, and `d_design` can be more nested
-than the G-study design.
+than the G-study design. Without `d_sizes`, `d_study()` repeats the G study,
+including the unequal numbers of conditions and missing scores of unbalanced
+data (Sec. 7.2).
 
 ## Example data
 
-Four synthetic data sets from Brennan (2001) are included.
+Seven synthetic data sets from Brennan (2001) are included, the last three
+unbalanced.
 
 | Data set | Design | Source |
 |:--|:--|:--|
@@ -101,6 +106,9 @@ Four synthetic data sets from Brennan (2001) are included.
 | `brennan_i_in_p` | Items nested within persons | Table 2.9 |
 | `brennan_p_x_i_x_o` | Persons crossed with items and occasions | Table 3.3 |
 | `brennan_p_x_r_in_t` | Raters nested within tasks, crossed with persons | Table 3.4 |
+| `brennan_i_in_p_unbalanced` | Items nested within persons, 3 to 5 per person | Table 7.2 |
+| `brennan_p_x_i_in_h_unbalanced` | Items nested within h, crossed with persons; 2, 4, and 2 items | Table 7.5 |
+| `brennan_p_x_i_missing` | Persons crossed with items, 13 missing scores | Table 7.7 |
 
 ## References
 

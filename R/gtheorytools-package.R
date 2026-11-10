@@ -15,6 +15,7 @@
 #'
 #' @seealso <https://zzg021.github.io/gtheorytools/>
 #'
-#' @importFrom stats as.formula ave formula model.frame optimHess sigma
+#' @importFrom methods new
+#' @importFrom stats as.formula formula model.frame optimHess sigma
 #' @keywords internal
 "_PACKAGE"

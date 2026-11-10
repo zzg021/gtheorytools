@@ -6,7 +6,7 @@
 \alias{gtheorytools-package}
 \title{gtheorytools: Tools for Generalizability Theory}
 \description{
-Estimates the variance components of one- and two-facet generalizability (G) studies with crossed or nested designs, by restricted maximum likelihood or, for balanced data, from the analysis of variance expected mean squares. Computes decision (D) studies with random, finite, or fixed facets. Reports standard errors for variance components, error variances, and generalizability and dependability coefficients. D studies can be compared across sample sizes and selected by a minimum G or Phi value.
+Estimates the variance components of one- and two-facet generalizability (G) studies with crossed or nested designs, by restricted maximum likelihood or from the analysis of variance expected mean squares, for balanced or unbalanced data. Computes decision (D) studies with random, finite, or fixed facets. Reports standard errors for variance components, error variances, and generalizability and dependability coefficients. D studies can be compared across sample sizes and selected by a minimum G or Phi value.
 }
 \details{
 \itemize{

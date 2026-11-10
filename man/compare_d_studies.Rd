@@ -61,8 +61,8 @@ compare_d_studies(
   d_sizes = list(F1 = c(4, 8, 16), F2 = c(1, 2))
 )
 
-# p x (R:T): only the listed numbers of tasks and raters per task, with at
-# most 12 ratings per person (Table 4.6).
+# p x (R:T): the listed numbers of tasks and raters per task, with at most
+# 12 ratings per person (Table 4.6).
 g_prt <- g_study(
   brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested"
 )

@@ -7,7 +7,7 @@
 d_study(
   g_study_result,
   universe_sizes,
-  d_sizes,
+  d_sizes = NULL,
   d_design = NULL,
   d_nesting = NULL
 )
@@ -21,7 +21,9 @@ G study may be omitted.}
 
 \item{d_sizes}{D-study sample sizes n', whole numbers named as in
 \code{universe_sizes}, with \verb{1 <= n' <= N'}. For a nested facet, n' is the
-number of conditions in each level of its parent.}
+number of conditions in each level of its parent. \code{NULL}, the default,
+repeats the G study: its sample sizes for balanced data, and its pattern
+of scores for unbalanced data (see Details).}
 
 \item{d_design}{The D-study design, one of the \code{design} values of
 \code{\link[=g_study]{g_study()}}. Defaults to the G-study design and may be more nested.}
@@ -38,7 +40,8 @@ standard errors for \code{tau}, \code{delta}, \code{Delta}, \code{G}, and \code{
 \item{\code{single_obs_results}}{A data frame of single-observation
 variance components and standard errors.}
 \item{\code{d_mean_results}}{A data frame of mean-score variance
-components and standard errors.}
+components and standard errors, with \code{divisor} and \code{delta_weight} for
+the G-study pattern of unbalanced data.}
 \item{\code{d_variance_component}}{Variance components after recoding
 to the D-study design.}
 \item{\code{single_obs}, \code{d_mean}}{The single-observation and
@@ -46,13 +49,14 @@ mean-score component estimates as one-row matrices.}
 \item{\code{d_variance_component_vcov}, \code{single_obs_vcov},
 \code{d_mean_vcov}}{Covariance matrices for the corresponding component
 estimates. \code{single_obs_vcov} and \code{d_mean_vcov} are \code{NULL} when
-standard errors are unavailable.}
+\code{se_available} is \code{FALSE}.}
 \item{Design information}{\code{g_design}, \code{d_design},
 \code{d_nesting}, \code{n_facets}, \code{component_mapping},
 \code{universe_sizes}, \code{d_sizes}, \code{facet_status}, and
-\code{facet_labels}.}
-\item{\code{se_available}}{Whether the G-study covariance matrix can
-be used to calculate standard errors.}
+\code{facet_labels}. \code{d_sizes} is \code{NULL} for the G-study pattern of
+unbalanced data.}
+\item{\code{se_available}}{Whether every entry of the G-study covariance
+matrix is finite, as the standard errors require.}
 }
 }
 \description{
@@ -70,17 +74,38 @@ variance \eqn{\sigma^2(\tau)}, relative error variance
   \qquad
   \Phi = \frac{\sigma^2(\tau)}{\sigma^2(\tau) + \sigma^2(\Delta)}}{
   G = tau / (tau + delta); Phi = tau / (tau + Delta).}
-G is the generalizability coefficient for relative decisions, such as
-ranking persons. Phi is the dependability coefficient for absolute
+G is for relative decisions, such as ranking persons, and Phi for absolute
 decisions, such as comparing scores with a cut score.
 
 A facet is random when N' is infinite, finite when \verb{n' < N' < Inf}, and
 fixed in the D study when \verb{n' = N'}.
+
+For unbalanced data, with every universe size \code{Inf} and \code{d_design} the
+G-study design, \code{d_sizes = NULL} gives the D study with the G-study
+pattern: the same numbers of conditions and the same missing scores, as
+when a new form keeps a test's unequal numbers of items per passage
+(Brennan, 2001, Sec. 7.2). A person's mean score weights each cell of an
+effect by its share of the person's scores, and each mean-score component
+is the variance component divided by the \code{divisor} column: the reciprocal
+of the mean, over persons, of the sum of the squared weights (Eqs. 7.18,
+7.27-7.29, and 7.41). \code{delta_weight} gives the share of each component in
+relative error, for which \eqn{\sigma^2(\tau) + \sigma^2(\delta)} is the
+expected variance of the person mean scores. An effect without persons
+enters it only when persons have different patterns, as with missing
+scores (Eq. 7.45).
 }
 \examples{
 # p x I with 12 items (Brennan, 2001, Table 2.4).
 g_pi <- g_study(brennan_p_x_i, p = "p", f1 = "i", design = "crossed")
 d_study(g_pi, universe_sizes = c(F1 = Inf), d_sizes = c(F1 = 12))
+
+# p x i with missing scores (Table 7.7), and the D study that repeats the
+# G-study pattern (Sec. 7.2.4).
+g_missing <- g_study(
+  brennan_p_x_i_missing, p = "p", f1 = "i", design = "crossed",
+  method = "anova"
+)
+d_study(g_missing, universe_sizes = c(F1 = Inf))
 
 # p x I x O with 4 items and 2 occasions (Table 4.4).
 g_pio <- g_study(

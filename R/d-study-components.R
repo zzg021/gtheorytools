@@ -150,25 +150,74 @@
   return(result_multiplier)
 }
 
-.d_mean_vc <- function(variance_component, single_obs, universe_sizes, d_sizes,
-                       object_of_measurement = "P") {
-  multiplier <- .d_mean_multiplier(
-    variance_component, single_obs, universe_sizes, d_sizes, object_of_measurement
-  )
-  result_mean_score <- as.numeric(single_obs) * multiplier
+# Multipliers for a D study with the G-study pattern of unbalanced data
+# (Brennan 2001, Sec. 7.2), every facet random. Person p's mean score gives the
+# alpha cell c the weight a_pc = n_pc / n_p+, its share of the person's scores.
+#
+# The absolute-error multiplier of sigma^2(alpha) is the mean over persons of
+# sum_c a_pc^2: 1 over the harmonic mean of the n_i:p in i:p (Eqs. 7.18-7.19),
+# 1 / n~_h for h and ph and 1 / n_i+ for i:h and pi:h in p x (I:H) (Eqs. 7.27
+# and 7.28), and 1 over the harmonic mean of the n_p in p x I with missing
+# scores (Eqs. 7.41-7.42).
+#
+# The relative-error multiplier makes sigma^2(delta) the expected variance of
+# the person means less sigma^2(p), the denominator of E rho^2 in Eq. 7.21:
+# sum_p sum_c (a_pc - abar_c)^2 / (n_p - 1), with abar_c the mean of a_pc over
+# all persons. Persons share no cell of an effect that contains p, so for such
+# an effect it equals the absolute multiplier. For an effect without p it is
+# the absolute multiplier less the mean over pairs of persons of
+# sum_c a_pc a_p'c (Eq. 7.45), and it is zero when every person has the same
+# number of scores in each cell, as in Eq. 7.29.
+.pattern_multipliers <- function(observed_design, effect_names) {
+  n_persons <- nlevels(observed_design$P)
+  person <- as.integer(observed_design$P)
+  scores_per_person <- tabulate(person, nbins = n_persons)
+  absolute <- numeric(length(effect_names))
+  relative <- numeric(length(effect_names))
+  names(absolute) <- effect_names
+  names(relative) <- effect_names
+
+  for (effect in effect_names) {
+    facets <- .parse_effect(effect)
+    person_cells <- .cell_index(observed_design[union("P", facets)])
+    n_person_cells <- max(person_cells)
+    counts <- tabulate(person_cells, nbins = n_person_cells)
+    first_score <- match(seq_len(n_person_cells), person_cells)
+    share <- counts / scores_per_person[person[first_score]]
+    absolute[[effect]] <- sum(share^2) / n_persons
+
+    if ("P" %in% facets) {
+      relative[[effect]] <- absolute[[effect]]
+      next
+    }
+    cells <- .cell_index(observed_design[facets])
+    cell_of_share <- cells[first_score]
+    persons_in_cell <- tabulate(cell_of_share, nbins = max(cells))
+    first_in_cell <- match(cell_of_share, cell_of_share)
+    if (all(persons_in_cell == n_persons) && all(counts == counts[first_in_cell])) {
+      relative[[effect]] <- 0
+      next
+    }
+    mean_share <- as.vector(rowsum(share, cell_of_share)) / n_persons
+    deviation <- share - mean_share[cell_of_share]
+    relative[[effect]] <- (sum(deviation^2) +
+      sum((n_persons - persons_in_cell) * mean_share^2)) / (n_persons - 1)
+  }
+
+  return(list(absolute = absolute, relative = relative))
+}
+
+.d_mean_vc <- function(single_obs, multiplier) {
+  result_mean_score <- as.numeric(single_obs) * multiplier[colnames(single_obs)]
   return(matrix(
     result_mean_score, 1, dimnames = list(NULL, colnames(single_obs))
   ))
 }
 
-.d_mean_vcov <- function(variance_component, single_obs, single_obs_vcov,
-                         universe_sizes, d_sizes, object_of_measurement = "P") {
-  multiplier <- .d_mean_multiplier(
-    variance_component, single_obs, universe_sizes, d_sizes, object_of_measurement
-  )
+.d_mean_vcov <- function(single_obs, single_obs_vcov, multiplier) {
   component_names <- colnames(single_obs)
 
-  transform_matrix <- diag(multiplier)
+  transform_matrix <- diag(multiplier[component_names], nrow = length(component_names))
   dimnames(transform_matrix) <- list(component_names, component_names)
 
   result <- transform_matrix %*%
@@ -179,13 +228,31 @@
   return(result)
 }
 
+# Standard errors from estimated sampling variances. With unbalanced ANOVA
+# estimates, the estimated covariance of the G-study components can have a
+# negative eigenvalue, so a linear combination of them can have an estimated
+# variance below zero; its standard error is NA, as in the G study.
+.standard_errors <- function(variances) {
+  negative <- !is.na(variances) & variances < 0
+  if (any(negative)) {
+    warning(
+      "The estimated sampling variance of ", paste(names(variances)[negative], collapse = ", "),
+      " is below zero; its standard error is NA.",
+      call. = FALSE
+    )
+  }
+  result <- sqrt(ifelse(negative, NA_real_, variances))
+  names(result) <- names(variances)
+  return(result)
+}
+
 .single_obs_vc_table <- function(single_obs, single_obs_vcov = NULL) {
   single_obs_values <- as.numeric(single_obs)
   names(single_obs_values) <- colnames(single_obs)
   standard_error <- rep(NA_real_, length(single_obs_values))
 
   if (!is.null(single_obs_vcov)) {
-    standard_error <- sqrt(diag(single_obs_vcov)[names(single_obs_values)])
+    standard_error <- .standard_errors(diag(single_obs_vcov)[names(single_obs_values)])
   }
 
   return(data.frame(
@@ -202,7 +269,7 @@
   standard_error <- rep(NA_real_, length(d_mean_values))
 
   if (!is.null(d_mean_vcov)) {
-    standard_error <- sqrt(diag(d_mean_vcov)[names(d_mean_values)])
+    standard_error <- .standard_errors(diag(d_mean_vcov)[names(d_mean_values)])
   }
 
   return(data.frame(
@@ -213,7 +280,12 @@
   ))
 }
 
-.g_coefficient <- function(d_mean, d_mean_vcov = NULL, object_of_measurement = "P") {
+# tau, delta, Delta, G, and Phi from the mean-score components. delta_weight
+# gives the share of each component in relative error; by default it is 1 for
+# the components with the object of measurement, other than its own, and 0
+# for the others.
+.g_coefficient <- function(d_mean, d_mean_vcov = NULL, object_of_measurement = "P",
+                           delta_weight = NULL) {
   d_mean_values <- as.numeric(d_mean)
   names(d_mean_values) <- colnames(d_mean)
 
@@ -225,17 +297,18 @@
   names(has_object) <- names(d_mean_values)
 
   tau_weight <- numeric(length(d_mean_values))
-  delta_weight <- numeric(length(d_mean_values))
-  Delta_weight <- numeric(length(d_mean_values))
+  Delta_weight <- rep(1, length(d_mean_values))
   names(tau_weight) <- names(d_mean_values)
-  names(delta_weight) <- names(d_mean_values)
   names(Delta_weight) <- names(d_mean_values)
-
   tau_weight[object_of_measurement] <- 1
-  delta_weight[has_object] <- 1
-  delta_weight[object_of_measurement] <- 0
-  Delta_weight <- delta_weight
-  Delta_weight[!has_object] <- 1
+  Delta_weight[object_of_measurement] <- 0
+
+  if (is.null(delta_weight)) {
+    delta_weight <- as.numeric(has_object)
+    names(delta_weight) <- names(d_mean_values)
+    delta_weight[object_of_measurement] <- 0
+  }
+  delta_weight <- delta_weight[names(d_mean_values)]
 
   tau <- sum(tau_weight * d_mean_values)
   delta <- sum(delta_weight * d_mean_values)
@@ -262,7 +335,7 @@
       Phi = Phi_weight
     )
 
-    standard_error <- sqrt(diag(se_weight %*% d_mean_vcov %*% t(se_weight)))
+    standard_error <- .standard_errors(diag(se_weight %*% d_mean_vcov %*% t(se_weight)))
   }
 
   return(data.frame(
