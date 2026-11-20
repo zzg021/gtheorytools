@@ -136,6 +136,16 @@
   return(result)
 }
 
+# The number of observed levels of each effect: the combinations of levels of
+# its facets.
+.effect_levels <- function(effect_names, observed_design) {
+  return(vapply(
+    effect_names,
+    function(effect_name) nrow(unique(observed_design[.parse_effect(effect_name)])),
+    numeric(1)
+  ))
+}
+
 # G-study sample size of each facet: its number of levels, or for a nested
 # facet its number of levels in each combination of levels of the facets it
 # is nested within (NA if that varies).
@@ -230,14 +240,10 @@
   return(invisible(NULL))
 }
 
-# Components for the universe of admissible observations with the facets in M
-# fixed (Brennan Eq. 3.34): sigma^2(A | M) sums sigma^2_S over the effects S
-# that add facets of M to A, each divided by the product of n over the added
-# facets. The covariance is W V W', where W holds these weights. The effects
-# whose facets are all in M are quadratic forms of fixed effects, so W has no
-# rows for them.
-.mixed_model_components <- function(components, fixed_facets, sample_sizes) {
-  fitted_effects <- names(components$vc)
+# The weights W of Brennan's Eq. 3.34, one row and one column per fitted
+# effect: row A and column S hold 1 over the product of n over the facets of
+# M that S adds to A, and zero for the other effects.
+.mixed_model_weights <- function(fitted_effects, fixed_facets, sample_sizes) {
   weights <- matrix(
     0,
     nrow = length(fitted_effects),
@@ -258,6 +264,19 @@
       }
     }
   }
+
+  return(weights)
+}
+
+# Components for the universe of admissible observations with the facets in M
+# fixed (Brennan Eq. 3.34): sigma^2(A | M) sums sigma^2_S over the effects S
+# that add facets of M to A, each divided by the product of n over the added
+# facets. The covariance is W V W', where W holds these weights. The effects
+# whose facets are all in M are quadratic forms of fixed effects, so W has no
+# rows for them.
+.mixed_model_components <- function(components, fixed_facets, sample_sizes) {
+  fitted_effects <- names(components$vc)
+  weights <- .mixed_model_weights(fitted_effects, fixed_facets, sample_sizes)
 
   vc <- as.vector(weights %*% components$vc)
   names(vc) <- fitted_effects
@@ -340,8 +359,9 @@
 #' Generalizability (G) Study from a Design String
 #'
 #' Estimates the variance components of a G study with any number of crossed
-#' and nested facets, written as a design string, by REML with [lme4::lmer()]
-#' or from the ANOVA expected mean squares.
+#' and nested facets, written as a design string, by REML with [lme4::lmer()],
+#' from the ANOVA expected mean squares, or by Markov chain Monte Carlo with
+#' [brms::brm()].
 #'
 #' @param data A data frame in long format, with one row per score and no
 #'   replicated design cells. Missing scores are dropped.
@@ -356,8 +376,18 @@
 #'   admissible observations, such as `"t"` or `c("b", "c")`. Requires
 #'   complete, balanced data.
 #' @param method `"reml"` for a random-intercept linear mixed model fitted by
-#'   REML, with standard errors from the observed information, or `"anova"`
-#'   for estimates from the expected mean squares (see ANOVA estimates).
+#'   REML, with standard errors from the observed information, `"anova"`
+#'   for estimates from the expected mean squares (see ANOVA estimates), or
+#'   `"bayes"` for the same model fitted by Markov chain Monte Carlo with
+#'   brms (see Bayesian estimates).
+#' @param bayes_options Optional named list of settings for
+#'   `method = "bayes"`: `chains` (default 4), `iter` (4000), `warmup` (half
+#'   of `iter`, at least 1), `seed` (`NA`, a random seed), `cores` (1),
+#'   `adapt_delta` (0.99), `max_treedepth` (12), `level` (0.95, the level of
+#'   the credible intervals, which the D studies of this G study also use),
+#'   `prior_scale` (the standard deviation of the scores), and `prior`, priors
+#'   made with [brms::set_prior()] (see Bayesian estimates). The default,
+#'   `NULL`, uses these defaults.
 #'
 #' @details
 #' In `design`, `A:B` nests every facet of A within every facet of B, and a
@@ -408,17 +438,61 @@
 #' estimate above zero, REML gives the same estimates, with standard errors
 #' larger by a factor of up to sqrt((df + 2) / df).
 #'
+#' @section Bayesian estimates:
+#' With `method = "bayes"`, the model of `method = "reml"` is fitted with
+#' [brms::brm()] (Bürkner, 2017), which requires the brms package, version
+#' 2.19.0 or later, and a C++ toolchain for Stan. Each standard deviation, the
+#' residual included, has a half Student-t prior with 3 degrees of freedom and
+#' scale `prior_scale`. The intercept has the default prior of brms, and with
+#' `fixed`, the fixed effects have flat priors. In `bayes_options`, a `prior`
+#' for a whole class, such as `brms::set_prior("exponential(1)", class = "sd")`,
+#' replaces the default of that class; a `prior` for one random effect is
+#' added, and the other effects keep the default. Its `group` is a term of the
+#' printed model formula: for the persons of a p x i design,
+#' `brms::set_prior("normal(0, 1)", class = "sd", group = "p")` in
+#' [g_study_general()] and `group = "P"` in [g_study()], which writes the
+#' formula with `P`, `F1`, and `F2`. An interaction is written as in the
+#' formula, such as `"P:F1"`. The printed result lists the priors used.
+#'
+#' The reported estimates are posterior medians, the standard errors posterior
+#' standard deviations, and the credible intervals equal-tailed, in columns
+#' named for the level in percent: `lower_95` and `upper_95` for a `level` of
+#' 0.95. Each row summarizes the draws of its own quantity, so the median of a
+#' sum is not the sum of the medians. An effect with few levels, such as 2 or
+#' 3, has a wide interval, and its median depends on the prior and can be far
+#' from the REML estimate; the printed result names the effects with fewer
+#' than 5 levels. `variance_component_draws` holds the draws of the fitted
+#' components; with `fixed`, the reported components apply Eq. 3.34 to each
+#' draw.
+#'
+#' D studies from a Bayesian G study apply every step to each posterior draw,
+#' so the intervals of G and Phi follow from the draws, without the delta
+#' method. Their intervals have the `level` of the G study; the draws they
+#' return give other intervals. [find_d_designs()] can select D studies by the
+#' posterior probability of meeting a target. The printed result gives the
+#' largest R-hat and the smallest effective sample size of the standard
+#' deviations, the smaller of the bulk and tail effective sample sizes. An
+#' R-hat above 1.01, an effective sample size below 400, a divergent
+#' transition, or a warning from brms is reported under the estimates and
+#' calls for more iterations or a larger `adapt_delta`.
+#'
+#' Before it compiles a model, Stan can print compiler output that looks like
+#' an error, such as a header file that is not found. The fit is not affected
+#' when the estimates are returned.
+#'
 #' @returns An object of class `g_study_general`, a list with the following
 #'   elements:
 #' \describe{
 #'   \item{\code{variance_components}}{A data frame of reported variance
 #'     components and standard errors, with effect labels built from the
 #'     data's column names. With `fixed`, the rows of the effects whose facets
-#'     are all fixed are `NA`.}
+#'     are all fixed are `NA`. With `method = "bayes"`, two more columns give
+#'     the credible intervals.}
 #'   \item{\code{variance_component}, \code{variance_component_se},
 #'     \code{variance_component_vcov}}{The fitted variance components,
 #'     their standard errors, and the covariance matrix used by
-#'     [d_study_general()].}
+#'     [d_study_general()]. With `method = "bayes"`, the medians, standard
+#'     deviations, and covariance matrix of the posterior draws.}
 #'   \item{\code{method}}{The estimation method.}
 #'   \item{\code{anova_table}}{With `method = "anova"`, a data frame of
 #'     degrees of freedom, T terms (Brennan, 2001, Eq. 7.1), sums of squares,
@@ -427,9 +501,20 @@
 #'   \item{\code{ems_coefficients}}{With `method = "anova"`, the matrix whose
 #'     row alpha and column beta give the coefficient of sigma^2(beta) in the
 #'     expected mean square of alpha.}
-#'   \item{\code{fit}}{The fitted `lmer` model.}
+#'   \item{\code{variance_component_draws}}{With `method = "bayes"`, a
+#'     matrix of posterior draws of the fitted components, one column per
+#'     effect, which [d_study_general()] uses.}
+#'   \item{\code{bayes_settings}}{With `method = "bayes"`, a list of
+#'     `prior_lines`, the priors as they are printed; `prior_scale`, the scale
+#'     of the default priors; `level`; and `n_levels`, the number of levels of
+#'     each random effect.}
+#'   \item{\code{fit}}{The fitted `lmer` model, or the `brmsfit` with
+#'     `method = "bayes"`.}
 #'   \item{\code{fit_diagnostics}}{Singularity and convergence information,
-#'     with messages and warnings from `lmer`.}
+#'     with messages and warnings from `lmer`. With `method = "bayes"`, the
+#'     largest R-hat, the smallest effective sample size, the number of
+#'     divergent transitions, the sampler settings, `issues`, the sentences
+#'     that are printed for them, and messages and warnings from brms.}
 #'   \item{Design information}{\code{g_design}, the design string;
 #'     \code{parents}, the facets each facet is nested within;
 #'     \code{facet_columns}, \code{formula}, \code{fixed_facets}, and
@@ -441,10 +526,14 @@
 #'     facet has the same number of levels in every cell of the facets it is
 #'     nested within.}
 #' }
-#' Elements for the other method are `NULL`.
+#' Elements for the other methods are `NULL`.
 #'
 #' @references
 #' Brennan, R. L. (2001). *Generalizability theory*. Springer.
+#'
+#' Bürkner, P.-C. (2017). brms: An R package for Bayesian multilevel models
+#' using Stan. *Journal of Statistical Software*, *80*(1), 1--28.
+#' \doi{10.18637/jss.v080.i01}
 #'
 #' @seealso [d_study_general()]; [g_study()] for the one- and two-facet
 #'   designs named by keyword.
@@ -480,16 +569,31 @@
 #' # the analogous ANOVA estimates (Sec. 7.1.3).
 #' g_study_general(brennan_p_x_i_in_h_unbalanced, design = "p x (i:h)", method = "anova")
 #'
+#' # Bayesian estimates for p x (r:t) (Table 3.4), which need brms and a C++
+#' # toolchain.
+#' \dontrun{
+#' g_study_general(
+#'   brennan_p_x_r_in_t, design = "p x (r:t)", method = "bayes",
+#'   bayes_options = list(seed = 1)
+#' )
+#' }
+#'
 #' @export
 g_study_general <- function(data, design, facets = NULL, score_column = "score",
-                            fixed = NULL, method = c("reml", "anova")) {
+                            fixed = NULL, method = c("reml", "anova", "bayes"),
+                            bayes_options = NULL) {
   method <- match.arg(method)
-  return(.fit_g_study(data, design, facets, score_column, fixed, method))
+  return(.fit_g_study(data, design, facets, score_column, fixed, method, bayes_options))
 }
 
 # The G study of g_study_general(). g_study() also gives `model_names`.
-.fit_g_study <- function(data, design, facets, score_column, fixed, method,
+.fit_g_study <- function(data, design, facets, score_column, fixed, method, bayes_options,
                          model_names = NULL) {
+  if (method == "bayes") {
+    bayes_options <- .resolve_bayes_options(bayes_options)
+  } else if (!is.null(bayes_options)) {
+    stop("bayes_options is only used with method = \"bayes\".", call. = FALSE)
+  }
   design <- .build_g_study_design(design, facets, score_column, model_names)
   fixed_facets <- .resolve_fixed_facets(fixed, design)
   dat_for_lmer <- .prepare_g_study_data(data, design)
@@ -521,16 +625,44 @@ g_study_general <- function(data, design, facets = NULL, score_column = "score",
   fit_diagnostics <- NULL
   anova_table <- NULL
   ems_coefficients <- NULL
-  if (method == "reml") {
+  draws <- NULL
+  bayes_settings <- NULL
+  # REML and Bayesian estimation fit the same model.
+  if (method %in% c("reml", "bayes")) {
     formula <- .lmer_formula(
       "score", design$lmer_terms[design$random_effects], design$lmer_terms[fixed_effects]
     )
     model_data <- dat_for_lmer
     names(model_data) <- c("score", unname(design$model_names[names(design$facet_columns)]))
+  }
+
+  if (method == "reml") {
     fit_result <- .fit_lmer_with_diagnostics(formula, model_data)
     fit <- fit_result$fit
     fit_diagnostics <- fit_result$diagnostics
     components <- .extract_variance_components(fit, design)
+  } else if (method == "bayes") {
+    if (!is.numeric(observed$score)) {
+      stop(
+        "method = \"bayes\" requires numeric scores, but the score column, ",
+        design$score_column, ", is of class ", class(observed$score)[[1]], ".",
+        call. = FALSE
+      )
+    }
+    .check_prior_groups(bayes_options$prior, design$lmer_terms[design$random_effects])
+    prior_scale <- .resolve_prior_scale(observed$score, bayes_options$prior_scale)
+    .check_brms_installed()
+    fit_result <- .fit_brms_with_diagnostics(formula, model_data, bayes_options, prior_scale)
+    fit <- fit_result$fit
+    fit_diagnostics <- fit_result$diagnostics
+    draws <- .extract_variance_component_draws(fit, design)
+    components <- .posterior_components(draws)
+    bayes_settings <- list(
+      prior_lines = .brms_prior_lines(fit, prior_scale),
+      prior_scale = prior_scale,
+      level = bayes_options$level,
+      n_levels = .effect_levels(design$random_effects, observed_design)
+    )
   } else {
     anova <- .anova_table(observed, effect_names)
     .check_anova_df(anova, effect_labels)
@@ -550,8 +682,17 @@ g_study_general <- function(data, design, facets = NULL, score_column = "score",
     )
   }
 
+  # The reported components are those of Eq. 3.34 for the fixed facets. The
+  # Bayesian estimates summarize the draws after Eq. 3.34 is applied to each
+  # draw.
   reported <- components
-  if (length(fixed_facets) > 0) {
+  interval_bounds <- NULL
+  if (method == "bayes") {
+    weights <- .mixed_model_weights(fitted_effects, fixed_facets, sample_sizes)
+    reported_summary <- .draw_summary(draws %*% t(weights), bayes_options$level)
+    reported <- list(vc = reported_summary$estimate, se = reported_summary$se)
+    interval_bounds <- reported_summary[c("lower", "upper")]
+  } else if (length(fixed_facets) > 0) {
     reported <- .mixed_model_components(components, fixed_facets, sample_sizes)
   }
 
@@ -570,6 +711,12 @@ g_study_general <- function(data, design, facets = NULL, score_column = "score",
     standard_error = unname(reported$se[effect_names]),
     row.names = NULL
   )
+  if (method == "bayes") {
+    vc_table <- .add_interval_columns(
+      vc_table, interval_bounds$lower[effect_names], interval_bounds$upper[effect_names],
+      bayes_options$level
+    )
+  }
 
   # variance_component holds the fitted components, the input to
   # d_study_general(); variance_components is the reported table.
@@ -590,7 +737,9 @@ g_study_general <- function(data, design, facets = NULL, score_column = "score",
     sample_sizes = sample_sizes,
     observed_design = observed_design,
     balanced = balanced,
-    variance_components = vc_table
+    variance_components = vc_table,
+    variance_component_draws = draws,
+    bayes_settings = bayes_settings
   )
   class(result) <- "g_study_general"
   return(result)
@@ -631,12 +780,17 @@ print.g_study_general <- function(x, ..., digits = 7) {
   return(invisible(x))
 }
 
-# The printed estimation step of a G study: the lmer formula, or the ANOVA
-# table and expected mean squares.
+# The printed estimation step of a G study: the lmer formula, with the priors
+# and sampler settings of a Bayesian fit, or the ANOVA table and expected mean
+# squares.
 .print_estimation <- function(x, digits) {
-  if (x$method == "reml") {
+  if (x$method %in% c("reml", "bayes")) {
     cat("Model formula:\n")
     cat(paste(deparse(x$formula, width.cutoff = 500), collapse = "\n"), "\n", sep = "")
+    if (x$method == "bayes") {
+      cat("\n")
+      .print_brms_settings(x$bayes_settings, x$fit_diagnostics)
+    }
     return(invisible(NULL))
   }
   cat("ANOVA table:\n")
@@ -648,9 +802,16 @@ print.g_study_general <- function(x, ..., digits = 7) {
   return(invisible(NULL))
 }
 
-# The lmer fit diagnostics, or a note when an ANOVA estimate of a random
-# effect, one not in `fixed_effects`, is below zero.
+# The lmer fit diagnostics; the notes on Bayesian estimates, with the brms
+# fit diagnostics; or a note when an ANOVA estimate of a random effect, one
+# not in `fixed_effects`, is below zero.
 .print_estimation_notes <- function(x, fixed_effects) {
+  if (x$method == "bayes") {
+    .print_posterior_note(x$bayes_settings$level)
+    .print_few_levels_note(x$bayes_settings$n_levels, x$variance_components)
+    .print_brms_fit_diagnostics(x$fit_diagnostics)
+    return(invisible(NULL))
+  }
   if (x$method == "reml") {
     .print_lmer_fit_diagnostics(x$fit_diagnostics)
     return(invisible(NULL))

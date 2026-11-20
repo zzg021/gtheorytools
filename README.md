@@ -83,9 +83,11 @@ nested within `f1`.
 `g_study()` fits linear mixed models by REML. `method = "anova"` gives the
 ANOVA estimates from the expected mean squares, with urGENOVA's analogous
 sums of squares for unbalanced data (Brennan, 2001, Sec. 7.1), and standard
-errors equal to GENOVA's for balanced data (Eq. 6.1). A facet fixed in the
-universe of admissible observations is named in `fixed`, such as
-`fixed = "t"`; this requires complete, balanced data.
+errors equal to GENOVA's for balanced data (Eq. 6.1). `method = "bayes"`
+fits the same model by Markov chain Monte Carlo with the optional brms
+package (Bürkner, 2017), and D studies then give credible intervals for G
+and Phi. A facet fixed in the universe of admissible observations is named
+in `fixed`, such as `fixed = "t"`; this requires complete, balanced data.
 
 In `d_study()`, `universe_sizes` and `d_sizes` make each facet random,
 finite, or fixed. `d_design` gives a more nested D-study design, with
@@ -149,3 +151,7 @@ Brennan, R. L. (2001). *Generalizability theory*. Springer.
 Bates, D., Mächler, M., Bolker, B., & Walker, S. (2015). Fitting linear
 mixed-effects models using lme4. *Journal of Statistical Software*, *67*(1),
 1–48. <https://doi.org/10.18637/jss.v067.i01>.
+
+Bürkner, P.-C. (2017). brms: An R package for Bayesian multilevel models
+using Stan. *Journal of Statistical Software*, *80*(1), 1–28.
+<https://doi.org/10.18637/jss.v080.i01>.

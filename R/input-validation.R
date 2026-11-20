@@ -5,6 +5,26 @@
   return(invisible(NULL))
 }
 
+# A whole number from 1 to .Machine$integer.max, the range of an R integer,
+# which brms and Stan need.
+.check_whole_number <- function(value, argument_name) {
+  if (!is.numeric(value) || length(value) != 1 || !is.finite(value) ||
+      value != round(value) || value < 1 || value > .Machine$integer.max) {
+    stop(
+      argument_name, " must be a single whole number from 1 to ", .Machine$integer.max, ".",
+      call. = FALSE
+    )
+  }
+  return(invisible(NULL))
+}
+
+.check_positive_number <- function(value, argument_name) {
+  if (!is.numeric(value) || length(value) != 1 || !is.finite(value) || value <= 0) {
+    stop(argument_name, " must be a single finite number above zero.", call. = FALSE)
+  }
+  return(invisible(NULL))
+}
+
 # A sentence for an error message, naming the names in `given` that match
 # names in `valid` only when case is ignored: "Names are case-sensitive: I is
 # not i." It is empty when there are none.

@@ -34,8 +34,10 @@ Description: Estimates the variance components of generalizability (G)
     studies with any number of crossed and nested facets, and computes
     decision (D) studies with random, finite, or fixed facets. Reports standard
     errors for variance components, error variances, and generalizability and
-    dependability coefficients. D studies can be compared across sample sizes
-    and selected by a minimum G or Phi value.
+    dependability coefficients. Variance components can also be estimated by
+    Bayesian methods, with D studies computed for each posterior draw. D
+    studies can be compared across sample sizes and selected by a minimum G
+    or Phi value.
 License: GPL-3
 URL: https://zzg021.github.io/gtheorytools/,
     https://github.com/zzg021/gtheorytools
@@ -54,6 +56,7 @@ Roxygen: list(markdown = TRUE)
 NeedsCompilation: no
 Config/roxygen2/version: 8.1.1
 Suggests:
+    brms (>= 2.19.0),
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Config/Needs/website: pkgdown

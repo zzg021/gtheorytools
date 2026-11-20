@@ -75,8 +75,8 @@
   return(values)
 }
 
-# A matrix with effects as row and column names, or a one-row matrix with
-# effects as column names.
+# A matrix with effects as row and column names, or a one-row matrix or a
+# matrix of posterior draws with effects as column names.
 .rename_effect_matrix <- function(values, effect_map) {
   if (is.null(values)) {
     return(NULL)
@@ -206,8 +206,9 @@
 #' Generalizability (G) Study
 #'
 #' Estimates the variance components of a one- or two-facet G study, with
-#' persons as the object of measurement, by REML with [lme4::lmer()] or from
-#' the ANOVA expected mean squares.
+#' persons as the object of measurement, by REML with [lme4::lmer()], from the
+#' ANOVA expected mean squares, or by Markov chain Monte Carlo with
+#' [brms::brm()].
 #'
 #' @inheritParams g_study_general
 #' @param p Name of the person (object of measurement) column.
@@ -241,16 +242,20 @@
 #' set its sample size equal to its universe size in [d_study()].
 #'
 #' @inheritSection g_study_general ANOVA estimates
+#' @inheritSection g_study_general Bayesian estimates
 #'
 #' @returns An object of class `g_study`, a list with the following elements:
 #' \describe{
 #'   \item{\code{variance_components}}{A data frame of reported variance
 #'     components and standard errors, with effect labels built from the
 #'     data's column names. With `fixed`, these are components for the universe
-#'     with that facet fixed; the fixed facet's main-effect row is `NA`.}
+#'     with that facet fixed; the fixed facet's main-effect row is `NA`. With
+#'     `method = "bayes"`, two more columns give the credible intervals.}
 #'   \item{\code{variance_component}, \code{variance_component_se},
 #'     \code{variance_component_vcov}}{The fitted variance components,
-#'     their standard errors, and the covariance matrix used by [d_study()].}
+#'     their standard errors, and the covariance matrix used by [d_study()].
+#'     With `method = "bayes"`, the medians, standard deviations, and
+#'     covariance matrix of the posterior draws.}
 #'   \item{\code{method}}{The estimation method.}
 #'   \item{\code{anova_table}}{With `method = "anova"`, a data frame of
 #'     degrees of freedom, T terms (Brennan, 2001, Eq. 7.1), sums of squares,
@@ -259,9 +264,20 @@
 #'   \item{\code{ems_coefficients}}{With `method = "anova"`, the matrix whose
 #'     row alpha and column beta give the coefficient of sigma^2(beta) in the
 #'     expected mean square of alpha.}
-#'   \item{\code{fit}}{The fitted `lmer` model.}
+#'   \item{\code{variance_component_draws}}{With `method = "bayes"`, a
+#'     matrix of posterior draws of the fitted components, one column per
+#'     effect.}
+#'   \item{\code{bayes_settings}}{With `method = "bayes"`, a list of
+#'     `prior_lines`, the priors as they are printed; `prior_scale`, the scale
+#'     of the default priors; `level`; and `n_levels`, the number of levels of
+#'     each random effect.}
+#'   \item{\code{fit}}{The fitted `lmer` model, or the `brmsfit` with
+#'     `method = "bayes"`.}
 #'   \item{\code{fit_diagnostics}}{Singularity and convergence information,
-#'     with messages and warnings from `lmer`.}
+#'     with messages and warnings from `lmer`. With `method = "bayes"`, the
+#'     largest R-hat, the smallest effective sample size, the number of
+#'     divergent transitions, the sampler settings, `issues`, the sentences
+#'     that are printed for them, and messages and warnings from brms.}
 #'   \item{Design information}{\code{g_design}, \code{design_label},
 #'     \code{formula}, \code{n_facets}, \code{facet_columns},
 #'     \code{fixed_facet}, and \code{sample_sizes}, which is `NA` for a
@@ -274,10 +290,14 @@
 #'     `g_study_general`, with p, a, and b for P, F1, and F2, from which
 #'     [d_study()] computes.}
 #' }
-#' Elements for the other method are `NULL`.
+#' Elements for the other methods are `NULL`.
 #'
 #' @references
 #' Brennan, R. L. (2001). *Generalizability theory*. Springer.
+#'
+#' Bürkner, P.-C. (2017). brms: An R package for Bayesian multilevel models
+#' using Stan. *Journal of Statistical Software*, *80*(1), 1--28.
+#' \doi{10.18637/jss.v080.i01}
 #'
 #' @seealso [d_study()]; [g_study_general()] for designs written as design
 #'   strings.
@@ -315,9 +335,19 @@
 #'   design = "partially_nested", method = "anova"
 #' )
 #'
+#' # Bayesian estimates for p x (r:t) (Table 3.4), which need brms and a C++
+#' # toolchain.
+#' \dontrun{
+#' g_study(
+#'   brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested",
+#'   method = "bayes", bayes_options = list(seed = 1)
+#' )
+#' }
+#'
 #' @export
 g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
-                    fixed = NULL, method = c("reml", "anova")) {
+                    fixed = NULL, method = c("reml", "anova", "bayes"),
+                    bayes_options = NULL) {
   method <- match.arg(method)
   .check_keyword_design(score_column, p, f1, f2, design)
   facet_columns <- c(P = p, F1 = f1, F2 = f2)
@@ -333,7 +363,8 @@ g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
   names(model_names) <- names(facets)
   fixed_symbol <- if (is.null(fixed_facet)) NULL else .keyword_symbols[[fixed_facet]]
   general <- .fit_g_study(
-    data, keyword_design$string, facets, score_column, fixed_symbol, method, model_names
+    data, keyword_design$string, facets, score_column, fixed_symbol, method, bayes_options,
+    model_names
   )
 
   anova_table <- NULL
@@ -341,6 +372,10 @@ g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
   if (method == "anova") {
     anova_table <- .rename_effect_table(general$anova_table, effect_map, facet_columns)
     ems_coefficients <- .rename_effect_matrix(general$ems_coefficients, effect_map)
+  }
+  bayes_settings <- general$bayes_settings
+  if (method == "bayes") {
+    bayes_settings$n_levels <- .rename_effect_vector(bayes_settings$n_levels, effect_map)
   }
   observed_design <- general$observed_design[names(facets)]
   names(observed_design) <- names(facet_columns)
@@ -369,7 +404,11 @@ g_study <- function(data, score_column = "score", p, f1, f2 = NULL, design,
     variance_components = .rename_effect_table(
       general$variance_components, effect_map, facet_columns
     ),
-    general = general
+    general = general,
+    variance_component_draws = .rename_effect_matrix(
+      general$variance_component_draws, effect_map
+    ),
+    bayes_settings = bayes_settings
   )
   class(result) <- "g_study"
   return(result)
@@ -581,7 +620,9 @@ print.g_study <- function(x, ..., digits = 7) {
     facet_labels = .d_facet_labels(
       facet_status, universe_sizes, d_sizes, g_study_result$fixed_facet, facet_columns
     ),
-    se_available = general$se_available
+    se_available = general$se_available,
+    coefficient_draws = general$coefficient_draws,
+    level = general$level
   )
   class(result) <- "d_study"
   return(result)
@@ -592,7 +633,8 @@ print.g_study <- function(x, ..., digits = 7) {
 #' Computes D-study variance components, error variances, and the
 #' generalizability (G) and dependability (Phi) coefficients for one set of
 #' facet sample sizes. Standard errors use the G-study covariance matrix
-#' and the delta method.
+#' and the delta method. From a G study with `method = "bayes"`, every step
+#' is applied to each posterior draw, and the draws are summarized.
 #'
 #' @inheritParams d_study_general
 #' @param g_study_result The object returned by [g_study()].
@@ -615,7 +657,15 @@ print.g_study <- function(x, ..., digits = 7) {
 #' @returns An object of class `d_study`, a list with the following elements:
 #' \describe{
 #'   \item{\code{coefficient_results}}{A data frame with estimates and
-#'     standard errors for `tau`, `delta`, `Delta`, `G`, and `Phi`.}
+#'     standard errors for `tau`, `delta`, `Delta`, `G`, and `Phi`. From a G
+#'     study with `method = "bayes"`, the estimates are posterior medians, the
+#'     standard errors posterior standard deviations, and two more columns,
+#'     `lower_95` and `upper_95` for a level of 0.95, give the credible
+#'     intervals; the two tables of components have them too.}
+#'   \item{\code{coefficient_draws}, \code{level}}{From a G study with
+#'     `method = "bayes"`, a matrix of the posterior draws of `tau`, `delta`,
+#'     `Delta`, `G`, and `Phi`, and the level of the credible intervals;
+#'     otherwise `NULL`.}
 #'   \item{\code{single_obs_results}}{A data frame of single-observation
 #'     variance components and standard errors.}
 #'   \item{\code{d_mean_results}}{A data frame of mean-score variance
@@ -741,7 +791,15 @@ print.d_study <- function(x, ..., digits = 7) {
 #'     `tau`, `delta`, `Delta`, `G`, and `Phi`, their `se_` columns,
 #'     `se_available`, and `status` (`"ok"`, `"warning"`, or `"error"`) with
 #'     the `warning` and `error` messages. See [d_study()] for the
-#'     definitions of the variances and coefficients.}
+#'     definitions of the variances and coefficients. From a G study with
+#'     `method = "bayes"`, the estimates are posterior medians, the `se_`
+#'     columns posterior standard deviations, and `lower_G`, `upper_G`,
+#'     `lower_Phi`, and `upper_Phi` the bounds of the credible intervals.}
+#'   \item{\code{coefficient_draws}, \code{level}}{From a G study with
+#'     `method = "bayes"`, a list with one matrix of posterior draws of
+#'     `tau`, `delta`, `Delta`, `G`, and `Phi` per D study, `NULL` for a D
+#'     study that failed, and the level of the credible intervals; otherwise
+#'     `NULL`.}
 #'   \item{Design information}{\code{g_design}, \code{d_design},
 #'     \code{d_nesting}, \code{universe_sizes},
 #'     \code{facet_columns}, and \code{fixed_facet}, which apply to all rows.}
@@ -807,7 +865,9 @@ compare_d_studies <- function(g_study_result, universe_sizes, d_sizes,
     d_nesting = design$d_nesting,
     universe_sizes = prepared$universe_sizes,
     facet_columns = g_study_result$facet_columns,
-    fixed_facet = g_study_result$fixed_facet
+    fixed_facet = g_study_result$fixed_facet,
+    coefficient_draws = general$coefficient_draws,
+    level = general$level
   )
   class(result) <- "d_study_comparison"
   return(result)

@@ -123,6 +123,15 @@
   ))
 }
 
+# The mean-score components of each posterior draw.
+.d_mean_draws <- function(single_obs_draws, multiplier) {
+  component_names <- colnames(single_obs_draws)
+  weights <- diag(multiplier[component_names], nrow = length(component_names))
+  result <- single_obs_draws %*% weights
+  colnames(result) <- component_names
+  return(result)
+}
+
 .d_mean_vcov <- function(single_obs, single_obs_vcov, multiplier) {
   component_names <- colnames(single_obs)
   weights <- diag(multiplier[component_names], nrow = length(component_names))
@@ -175,16 +184,27 @@
   return(result)
 }
 
-# tau, delta, Delta, G, and Phi from the mean-score components. delta_weight
-# gives the share of each component in relative error; by default it is 1 for
-# the components with the object of measurement, other than its own, and 0
-# for the others.
-.g_coefficient <- function(d_mean, d_mean_vcov, object_of_measurement,
-                           delta_weight = NULL) {
-  component_names <- colnames(d_mean)
-  d_mean_values <- as.numeric(d_mean)
+# The table of .component_table() from posterior draws of the components:
+# posterior medians, posterior standard deviations, and credible intervals.
+.component_draws_table <- function(draws, estimate_column, effect_labels, source_effects,
+                                   level) {
+  result <- .component_table(
+    .posterior_median_row(draws), cov(draws), estimate_column, effect_labels, source_effects
+  )
+  draw_summary <- .draw_summary(draws, level)
+  result <- .add_interval_columns(
+    result, draw_summary$lower[result$effect], draw_summary$upper[result$effect], level
+  )
+  return(result)
+}
+
+# The weights of tau, delta, and Delta on the mean-score components.
+# delta_weight gives the share of each component in relative error; by default
+# it is 1 for the components with the object of measurement, other than its
+# own, and 0 for the others.
+.coefficient_weights <- function(component_names, object_of_measurement,
+                                 delta_weight = NULL) {
   tau_weight <- as.numeric(component_names == object_of_measurement)
-  Delta_weight <- 1 - tau_weight
   if (is.null(delta_weight)) {
     has_object <- vapply(
       component_names,
@@ -195,6 +215,19 @@
   } else {
     delta_weight <- unname(delta_weight[component_names])
   }
+  return(list(tau = tau_weight, delta = delta_weight, Delta = 1 - tau_weight))
+}
+
+# tau, delta, Delta, G, and Phi from the mean-score components, with the
+# weights of .coefficient_weights().
+.g_coefficient <- function(d_mean, d_mean_vcov, object_of_measurement,
+                           delta_weight = NULL) {
+  component_names <- colnames(d_mean)
+  d_mean_values <- as.numeric(d_mean)
+  weights <- .coefficient_weights(component_names, object_of_measurement, delta_weight)
+  tau_weight <- weights$tau
+  delta_weight <- weights$delta
+  Delta_weight <- weights$Delta
 
   tau <- sum(tau_weight * d_mean_values)
   delta <- sum(delta_weight * d_mean_values)
@@ -229,4 +262,33 @@
     standard_error = unname(standard_error),
     row.names = NULL
   ))
+}
+
+# tau, delta, Delta, G, and Phi for each posterior draw of the mean-score
+# components: a matrix with one row per draw.
+.g_coefficient_draws <- function(d_mean_draws, object_of_measurement,
+                                 delta_weight = NULL) {
+  weights <- .coefficient_weights(
+    colnames(d_mean_draws), object_of_measurement, delta_weight
+  )
+  tau <- as.vector(d_mean_draws %*% weights$tau)
+  delta <- as.vector(d_mean_draws %*% weights$delta)
+  Delta <- as.vector(d_mean_draws %*% weights$Delta)
+  G <- tau / (tau + delta)
+  Phi <- tau / (tau + Delta)
+  return(cbind(tau = tau, delta = delta, Delta = Delta, G = G, Phi = Phi))
+}
+
+# The table of .g_coefficient() from posterior draws: posterior medians,
+# posterior standard deviations, and credible intervals.
+.coefficient_draws_table <- function(coefficient_draws, level) {
+  draw_summary <- .draw_summary(coefficient_draws, level)
+  result <- data.frame(
+    quantity = colnames(coefficient_draws),
+    estimate = unname(draw_summary$estimate),
+    standard_error = unname(draw_summary$se),
+    row.names = NULL
+  )
+  result <- .add_interval_columns(result, draw_summary$lower, draw_summary$upper, level)
+  return(result)
 }

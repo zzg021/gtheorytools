@@ -36,7 +36,15 @@ G study.}
 An object of class \code{d_study}, a list with the following elements:
 \describe{
 \item{\code{coefficient_results}}{A data frame with estimates and
-standard errors for \code{tau}, \code{delta}, \code{Delta}, \code{G}, and \code{Phi}.}
+standard errors for \code{tau}, \code{delta}, \code{Delta}, \code{G}, and \code{Phi}. From a G
+study with \code{method = "bayes"}, the estimates are posterior medians, the
+standard errors posterior standard deviations, and two more columns,
+\code{lower_95} and \code{upper_95} for a level of 0.95, give the credible
+intervals; the two tables of components have them too.}
+\item{\code{coefficient_draws}, \code{level}}{From a G study with
+\code{method = "bayes"}, a matrix of the posterior draws of \code{tau}, \code{delta},
+\code{Delta}, \code{G}, and \code{Phi}, and the level of the credible intervals;
+otherwise \code{NULL}.}
 \item{\code{single_obs_results}}{A data frame of single-observation
 variance components and standard errors.}
 \item{\code{d_mean_results}}{A data frame of mean-score variance
@@ -63,7 +71,8 @@ be used to calculate standard errors.}
 Computes D-study variance components, error variances, and the
 generalizability (G) and dependability (Phi) coefficients for one set of
 facet sample sizes. Standard errors use the G-study covariance matrix
-and the delta method.
+and the delta method. From a G study with \code{method = "bayes"}, every step
+is applied to each posterior draw, and the draws are summarized.
 }
 \details{
 A facet is random when N' is infinite, finite when \verb{n' < N' < Inf}, and

@@ -6,7 +6,7 @@
 \alias{gtheorytools-package}
 \title{gtheorytools: Tools for Generalizability Theory}
 \description{
-Estimates the variance components of generalizability (G) studies with any number of crossed and nested facets, and computes decision (D) studies with random, finite, or fixed facets. Reports standard errors for variance components, error variances, and generalizability and dependability coefficients. D studies can be compared across sample sizes and selected by a minimum G or Phi value.
+Estimates the variance components of generalizability (G) studies with any number of crossed and nested facets, and computes decision (D) studies with random, finite, or fixed facets. Reports standard errors for variance components, error variances, and generalizability and dependability coefficients. Variance components can also be estimated by Bayesian methods, with D studies computed for each posterior draw. D studies can be compared across sample sizes and selected by a minimum G or Phi value.
 }
 \details{
 \itemize{
@@ -28,6 +28,10 @@ Brennan, R. L. (2001). \emph{Generalizability theory}. Springer.
 Bates, D., Mächler, M., Bolker, B., & Walker, S. (2015). Fitting linear
 mixed-effects models using lme4. \emph{Journal of Statistical Software},
 \emph{67}(1), 1--48. \doi{10.18637/jss.v067.i01}
+
+Bürkner, P.-C. (2017). brms: An R package for Bayesian multilevel models
+using Stan. \emph{Journal of Statistical Software}, \emph{80}(1), 1--28.
+\doi{10.18637/jss.v080.i01}
 }
 \seealso{
 \url{https://zzg021.github.io/gtheorytools/}

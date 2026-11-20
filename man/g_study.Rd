@@ -12,7 +12,8 @@ g_study(
   f2 = NULL,
   design,
   fixed = NULL,
-  method = c("reml", "anova")
+  method = c("reml", "anova", "bayes"),
+  bayes_options = NULL
 )
 }
 \arguments{
@@ -35,8 +36,19 @@ the universe of admissible observations. \code{fully_crossed} allows either
 facet and \code{partially_nested} only \code{f1}. Requires complete, balanced data.}
 
 \item{method}{\code{"reml"} for a random-intercept linear mixed model fitted by
-REML, with standard errors from the observed information, or \code{"anova"}
-for estimates from the expected mean squares (see ANOVA estimates).}
+REML, with standard errors from the observed information, \code{"anova"}
+for estimates from the expected mean squares (see ANOVA estimates), or
+\code{"bayes"} for the same model fitted by Markov chain Monte Carlo with
+brms (see Bayesian estimates).}
+
+\item{bayes_options}{Optional named list of settings for
+\code{method = "bayes"}: \code{chains} (default 4), \code{iter} (4000), \code{warmup} (half
+of \code{iter}, at least 1), \code{seed} (\code{NA}, a random seed), \code{cores} (1),
+\code{adapt_delta} (0.99), \code{max_treedepth} (12), \code{level} (0.95, the level of
+the credible intervals, which the D studies of this G study also use),
+\code{prior_scale} (the standard deviation of the scores), and \code{prior}, priors
+made with \code{\link[brms:set_prior]{brms::set_prior()}} (see Bayesian estimates). The default,
+\code{NULL}, uses these defaults.}
 }
 \value{
 An object of class \code{g_study}, a list with the following elements:
@@ -44,10 +56,13 @@ An object of class \code{g_study}, a list with the following elements:
 \item{\code{variance_components}}{A data frame of reported variance
 components and standard errors, with effect labels built from the
 data's column names. With \code{fixed}, these are components for the universe
-with that facet fixed; the fixed facet's main-effect row is \code{NA}.}
+with that facet fixed; the fixed facet's main-effect row is \code{NA}. With
+\code{method = "bayes"}, two more columns give the credible intervals.}
 \item{\code{variance_component}, \code{variance_component_se},
 \code{variance_component_vcov}}{The fitted variance components,
-their standard errors, and the covariance matrix used by \code{\link[=d_study]{d_study()}}.}
+their standard errors, and the covariance matrix used by \code{\link[=d_study]{d_study()}}.
+With \code{method = "bayes"}, the medians, standard deviations, and
+covariance matrix of the posterior draws.}
 \item{\code{method}}{The estimation method.}
 \item{\code{anova_table}}{With \code{method = "anova"}, a data frame of
 degrees of freedom, T terms (Brennan, 2001, Eq. 7.1), sums of squares,
@@ -56,9 +71,20 @@ are set to zero.}
 \item{\code{ems_coefficients}}{With \code{method = "anova"}, the matrix whose
 row alpha and column beta give the coefficient of sigma^2(beta) in the
 expected mean square of alpha.}
-\item{\code{fit}}{The fitted \code{lmer} model.}
+\item{\code{variance_component_draws}}{With \code{method = "bayes"}, a
+matrix of posterior draws of the fitted components, one column per
+effect.}
+\item{\code{bayes_settings}}{With \code{method = "bayes"}, a list of
+\code{prior_lines}, the priors as they are printed; \code{prior_scale}, the scale
+of the default priors; \code{level}; and \code{n_levels}, the number of levels of
+each random effect.}
+\item{\code{fit}}{The fitted \code{lmer} model, or the \code{brmsfit} with
+\code{method = "bayes"}.}
 \item{\code{fit_diagnostics}}{Singularity and convergence information,
-with messages and warnings from \code{lmer}.}
+with messages and warnings from \code{lmer}. With \code{method = "bayes"}, the
+largest R-hat, the smallest effective sample size, the number of
+divergent transitions, the sampler settings, \code{issues}, the sentences
+that are printed for them, and messages and warnings from brms.}
 \item{Design information}{\code{g_design}, \code{design_label},
 \code{formula}, \code{n_facets}, \code{facet_columns},
 \code{fixed_facet}, and \code{sample_sizes}, which is \code{NA} for a
@@ -71,12 +97,13 @@ facet has the same number of conditions in every level of its parent.}
 \code{g_study_general}, with p, a, and b for P, F1, and F2, from which
 \code{\link[=d_study]{d_study()}} computes.}
 }
-Elements for the other method are \code{NULL}.
+Elements for the other methods are \code{NULL}.
 }
 \description{
 Estimates the variance components of a one- or two-facet G study, with
-persons as the object of measurement, by REML with \code{\link[lme4:lmer]{lme4::lmer()}} or from
-the ANOVA expected mean squares.
+persons as the object of measurement, by REML with \code{\link[lme4:lmer]{lme4::lmer()}}, from the
+ANOVA expected mean squares, or by Markov chain Monte Carlo with
+\code{\link[brms:brm]{brms::brm()}}.
 }
 \details{
 P, F1, and F2 correspond to the columns named by \code{p}, \code{f1}, and \code{f2}.
@@ -115,6 +142,50 @@ estimate above zero, REML gives the same estimates, with standard errors
 larger by a factor of up to sqrt((df + 2) / df).
 }
 
+\section{Bayesian estimates}{
+
+With \code{method = "bayes"}, the model of \code{method = "reml"} is fitted with
+\code{\link[brms:brm]{brms::brm()}} (Bürkner, 2017), which requires the brms package, version
+2.19.0 or later, and a C++ toolchain for Stan. Each standard deviation, the
+residual included, has a half Student-t prior with 3 degrees of freedom and
+scale \code{prior_scale}. The intercept has the default prior of brms, and with
+\code{fixed}, the fixed effects have flat priors. In \code{bayes_options}, a \code{prior}
+for a whole class, such as \code{brms::set_prior("exponential(1)", class = "sd")},
+replaces the default of that class; a \code{prior} for one random effect is
+added, and the other effects keep the default. Its \code{group} is a term of the
+printed model formula: for the persons of a p x i design,
+\code{brms::set_prior("normal(0, 1)", class = "sd", group = "p")} in
+\code{\link[=g_study_general]{g_study_general()}} and \code{group = "P"} in \code{\link[=g_study]{g_study()}}, which writes the
+formula with \code{P}, \code{F1}, and \code{F2}. An interaction is written as in the
+formula, such as \code{"P:F1"}. The printed result lists the priors used.
+
+The reported estimates are posterior medians, the standard errors posterior
+standard deviations, and the credible intervals equal-tailed, in columns
+named for the level in percent: \code{lower_95} and \code{upper_95} for a \code{level} of
+0.95. Each row summarizes the draws of its own quantity, so the median of a
+sum is not the sum of the medians. An effect with few levels, such as 2 or
+3, has a wide interval, and its median depends on the prior and can be far
+from the REML estimate; the printed result names the effects with fewer
+than 5 levels. \code{variance_component_draws} holds the draws of the fitted
+components; with \code{fixed}, the reported components apply Eq. 3.34 to each
+draw.
+
+D studies from a Bayesian G study apply every step to each posterior draw,
+so the intervals of G and Phi follow from the draws, without the delta
+method. Their intervals have the \code{level} of the G study; the draws they
+return give other intervals. \code{\link[=find_d_designs]{find_d_designs()}} can select D studies by the
+posterior probability of meeting a target. The printed result gives the
+largest R-hat and the smallest effective sample size of the standard
+deviations, the smaller of the bulk and tail effective sample sizes. An
+R-hat above 1.01, an effective sample size below 400, a divergent
+transition, or a warning from brms is reported under the estimates and
+calls for more iterations or a larger \code{adapt_delta}.
+
+Before it compiles a model, Stan can print compiler output that looks like
+an error, such as a header file that is not found. The fit is not affected
+when the estimates are returned.
+}
+
 \examples{
 # p x i (Brennan, 2001, Table 2.3).
 g_study(brennan_p_x_i, p = "p", f1 = "i", design = "crossed")
@@ -148,9 +219,22 @@ g_study(
   design = "partially_nested", method = "anova"
 )
 
+# Bayesian estimates for p x (r:t) (Table 3.4), which need brms and a C++
+# toolchain.
+\dontrun{
+g_study(
+  brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested",
+  method = "bayes", bayes_options = list(seed = 1)
+)
+}
+
 }
 \references{
 Brennan, R. L. (2001). \emph{Generalizability theory}. Springer.
+
+Bürkner, P.-C. (2017). brms: An R package for Bayesian multilevel models
+using Stan. \emph{Journal of Statistical Software}, \emph{80}(1), 1--28.
+\doi{10.18637/jss.v080.i01}
 }
 \seealso{
 \code{\link[=d_study]{d_study()}}; \code{\link[=g_study_general]{g_study_general()}} for designs written as design

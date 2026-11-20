@@ -260,7 +260,8 @@
 }
 
 # The D-study components are sums of G-study components, W sigma^2 with W
-# marking the sources of each, and their covariance is W V W'.
+# marking the sources of each, and their covariance is W V W'. W is returned
+# as `weights`.
 .recode_variance_components <- function(variance_component, variance_component_vcov,
                                         d_parents, fixed_facets) {
   g_effects <- names(variance_component)
@@ -292,6 +293,7 @@
     variance_component = d_variance_component,
     variance_component_vcov = d_variance_component_vcov,
     component_sources = component_sources,
-    component_mapping = component_mapping
+    component_mapping = component_mapping,
+    weights = weights
   ))
 }

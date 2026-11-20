@@ -39,7 +39,15 @@ contain the row number (\code{scenario}), facet sample sizes, estimates of
 \code{tau}, \code{delta}, \code{Delta}, \code{G}, and \code{Phi}, their \code{se_} columns,
 \code{se_available}, and \code{status} (\code{"ok"}, \code{"warning"}, or \code{"error"}) with
 the \code{warning} and \code{error} messages. See \code{\link[=d_study]{d_study()}} for the
-definitions of the variances and coefficients.}
+definitions of the variances and coefficients. From a G study with
+\code{method = "bayes"}, the estimates are posterior medians, the \code{se_}
+columns posterior standard deviations, and \code{lower_G}, \code{upper_G},
+\code{lower_Phi}, and \code{upper_Phi} the bounds of the credible intervals.}
+\item{\code{coefficient_draws}, \code{level}}{From a G study with
+\code{method = "bayes"}, a list with one matrix of posterior draws of
+\code{tau}, \code{delta}, \code{Delta}, \code{G}, and \code{Phi} per D study, \code{NULL} for a D
+study that failed, and the level of the credible intervals; otherwise
+\code{NULL}.}
 \item{Design information}{\code{g_design}, \code{d_design},
 \code{d_nesting}, \code{universe_sizes},
 \code{facet_columns}, and \code{fixed_facet}, which apply to all rows.}

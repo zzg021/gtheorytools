@@ -58,6 +58,16 @@
   )
   variance_component <- recoded$variance_component
   variance_component_vcov <- recoded$variance_component_vcov
+  # From a Bayesian G study, each step is applied to every posterior draw,
+  # and the estimates are the posterior medians.
+  draws <- g_study_result$variance_component_draws
+  level <- g_study_result$bayes_settings$level
+  if (!is.null(draws)) {
+    draws <- draws[, colnames(recoded$weights), drop = FALSE] %*% t(recoded$weights)
+    components <- .posterior_components(draws)
+    variance_component <- components$vc
+    variance_component_vcov <- components$vcov
+  }
   effects <- names(variance_component)
   effect_labels <- vapply(effects, .effect_label, character(1), facet_columns = facet_columns)
   # The labels of the G-study components summed into each D-study component.
@@ -71,16 +81,26 @@
   )
 
   weights <- .single_obs_weights(effects, universe_values, object_of_measurement)
-  single_obs <- matrix(
-    weights %*% variance_component, nrow = 1, dimnames = list(NULL, effects)
-  )
   single_obs_cov <- NULL
-  if (se_available) {
-    single_obs_cov <- weights %*% variance_component_vcov %*% t(weights)
+  single_obs_draws <- NULL
+  if (is.null(draws)) {
+    single_obs <- matrix(
+      weights %*% variance_component, nrow = 1, dimnames = list(NULL, effects)
+    )
+    if (se_available) {
+      single_obs_cov <- weights %*% variance_component_vcov %*% t(weights)
+    }
+    single_obs_results <- .component_table(
+      single_obs, single_obs_cov, "single_obs_estimate", effect_labels, source_effects
+    )
+  } else {
+    single_obs_draws <- draws %*% t(weights)
+    single_obs <- .posterior_median_row(single_obs_draws)
+    single_obs_cov <- cov(single_obs_draws)
+    single_obs_results <- .component_draws_table(
+      single_obs_draws, "single_obs_estimate", effect_labels, source_effects, level
+    )
   }
-  single_obs_results <- .component_table(
-    single_obs, single_obs_cov, "single_obs_estimate", effect_labels, source_effects
-  )
 
   return(list(
     g_study_result = g_study_result,
@@ -96,7 +116,9 @@
     object_of_measurement = object_of_measurement,
     single_obs = single_obs,
     single_obs_cov = single_obs_cov,
-    single_obs_results = single_obs_results
+    single_obs_results = single_obs_results,
+    single_obs_draws = single_obs_draws,
+    level = level
   ))
 }
 
@@ -185,23 +207,40 @@
     facet_status, universe_values, d_values, g_study_result$fixed_facets, shown_names
   )
 
-  d_mean <- .d_mean_vc(prepared$single_obs, multiplier)
   d_mean_cov <- NULL
-  if (!is.null(prepared$single_obs_cov)) {
-    d_mean_cov <- .d_mean_vcov(prepared$single_obs, prepared$single_obs_cov, multiplier)
+  d_mean_draws <- NULL
+  if (is.null(prepared$single_obs_draws)) {
+    d_mean <- .d_mean_vc(prepared$single_obs, multiplier)
+    if (!is.null(prepared$single_obs_cov)) {
+      d_mean_cov <- .d_mean_vcov(prepared$single_obs, prepared$single_obs_cov, multiplier)
+    }
+    d_mean_results <- .component_table(
+      d_mean, d_mean_cov, "mean_score_estimate", prepared$effect_labels,
+      prepared$source_effects
+    )
+  } else {
+    d_mean_draws <- .d_mean_draws(prepared$single_obs_draws, multiplier)
+    d_mean <- .posterior_median_row(d_mean_draws)
+    d_mean_cov <- cov(d_mean_draws)
+    d_mean_results <- .component_draws_table(
+      d_mean_draws, "mean_score_estimate", prepared$effect_labels,
+      prepared$source_effects, prepared$level
+    )
   }
 
-  d_mean_results <- .component_table(
-    d_mean, d_mean_cov, "mean_score_estimate", prepared$effect_labels,
-    prepared$source_effects
-  )
   if (is.null(d_sizes)) {
     d_mean_results$divisor <- unname(1 / multiplier[d_mean_results$effect])
     d_mean_results$delta_weight <- unname(delta_weight[d_mean_results$effect])
   }
-  coefficient_results <- .g_coefficient(
-    d_mean, d_mean_cov, object_of_measurement, delta_weight
-  )
+  coefficient_draws <- NULL
+  if (is.null(d_mean_draws)) {
+    coefficient_results <- .g_coefficient(
+      d_mean, d_mean_cov, object_of_measurement, delta_weight
+    )
+  } else {
+    coefficient_draws <- .g_coefficient_draws(d_mean_draws, object_of_measurement, delta_weight)
+    coefficient_results <- .coefficient_draws_table(coefficient_draws, prepared$level)
+  }
 
   result <- list(
     g_design = prepared$design$g_design,
@@ -221,7 +260,9 @@
     d_sizes = d_values,
     facet_status = facet_status,
     facet_labels = facet_labels,
-    se_available = prepared$se_available
+    se_available = prepared$se_available,
+    coefficient_draws = coefficient_draws,
+    level = prepared$level
   )
   class(result) <- "d_study_general"
   return(result)
@@ -232,7 +273,9 @@
 #' Computes D-study variance components, error variances, and the
 #' generalizability (G) and dependability (Phi) coefficients for one object
 #' of measurement and one set of facet sample sizes. Standard errors use the
-#' G-study covariance matrix and the delta method.
+#' G-study covariance matrix and the delta method. From a G study with
+#' `method = "bayes"`, every step is applied to each posterior draw, and the
+#' draws are summarized.
 #'
 #' @param g_study_result The object returned by [g_study_general()].
 #' @param object_of_measurement The symbol of the facet whose levels are
@@ -295,7 +338,15 @@
 #'   elements:
 #' \describe{
 #'   \item{\code{coefficient_results}}{A data frame with estimates and
-#'     standard errors for `tau`, `delta`, `Delta`, `G`, and `Phi`.}
+#'     standard errors for `tau`, `delta`, `Delta`, `G`, and `Phi`. From a G
+#'     study with `method = "bayes"`, the estimates are posterior medians, the
+#'     standard errors posterior standard deviations, and two more columns,
+#'     `lower_95` and `upper_95` for a level of 0.95, give the credible
+#'     intervals; the two tables of components have them too.}
+#'   \item{\code{coefficient_draws}, \code{level}}{From a G study with
+#'     `method = "bayes"`, a matrix of the posterior draws of `tau`, `delta`,
+#'     `Delta`, `G`, and `Phi`, and the level of the credible intervals;
+#'     otherwise `NULL`.}
 #'   \item{\code{single_obs_results}}{A data frame of single-observation
 #'     variance components and standard errors.}
 #'   \item{\code{d_mean_results}}{A data frame of mean-score variance
@@ -415,5 +466,8 @@ print.d_study_general <- function(x, ..., digits = 7) {
   cat("\n")
   cat("G coefficient and dependability:\n")
   print(x$coefficient_results, digits = digits, row.names = FALSE)
+  if (!is.null(x$coefficient_draws)) {
+    .print_posterior_note(x$level)
+  }
   return(invisible(NULL))
 }

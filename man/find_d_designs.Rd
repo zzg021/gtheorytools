@@ -4,7 +4,7 @@
 \alias{find_d_designs}
 \title{Select D Studies That Meet a Coefficient Target}
 \usage{
-find_d_designs(comparison, coefficient, target)
+find_d_designs(comparison, coefficient, target, probability = NULL)
 }
 \arguments{
 \item{comparison}{The object returned by \code{\link[=compare_d_studies]{compare_d_studies()}} or
@@ -14,6 +14,12 @@ find_d_designs(comparison, coefficient, target)
 
 \item{target}{A number between 0 and 1. An estimate equal to the target up
 to rounding error, \code{sqrt(.Machine$double.eps)}, qualifies.}
+
+\item{probability}{Optional number between 0 and 1: the minimum posterior
+probability that the coefficient is at least \code{target}. Requires a
+comparison from a G study with \code{method = "bayes"}. A draw equal to the
+target up to the rounding error above counts as meeting it. The default,
+\code{NULL}, selects by the estimate.}
 }
 \value{
 An object of class \code{d_study_selection}, a list with the following
@@ -26,11 +32,17 @@ target, in their original order.}
 \item{\code{meets_target}}{Whether each D study meets the target; \code{NA}
 when the coefficient has no finite estimate.}
 \item{\code{comparison}}{The input comparison object.}
+\item{\code{probability}}{The minimum posterior probability, or \code{NULL}.}
+\item{\code{posterior_probability}}{From a G study with
+\code{method = "bayes"}, the posterior probability that each D study meets
+the target, also a column of \code{designs}; otherwise \code{NULL}.}
 }
 }
 \description{
 Returns the D studies in \code{comparison} whose estimated G or Phi is at
-least \code{target}.
+least \code{target}. From a G study with \code{method = "bayes"}, the estimate is the
+posterior median, and \code{probability} instead selects the D studies whose
+posterior probability of meeting the target is at least \code{probability}.
 }
 \examples{
 # p x (r:t) designs with at most 12 ratings per person (Brennan, 2001,
@@ -44,5 +56,21 @@ comparison <- compare_d_studies(
   d_sizes = data.frame(F1 = 1:6, F2 = c(12, 6, 4, 3, 2, 2))
 )
 find_d_designs(comparison, coefficient = "G", target = 0.55)
+
+# From Bayesian estimates, which need brms and a C++ toolchain, the designs
+# whose G coefficient is at least .55 with posterior probability .50 or
+# more.
+\dontrun{
+g_bayes <- g_study(
+  brennan_p_x_r_in_t, p = "p", f1 = "t", f2 = "r", design = "partially_nested",
+  method = "bayes", bayes_options = list(seed = 1)
+)
+comparison <- compare_d_studies(
+  g_bayes,
+  universe_sizes = c(F1 = Inf, F2 = Inf),
+  d_sizes = data.frame(F1 = 1:6, F2 = c(12, 6, 4, 3, 2, 2))
+)
+find_d_designs(comparison, coefficient = "G", target = 0.55, probability = 0.5)
+}
 
 }

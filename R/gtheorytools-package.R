@@ -19,10 +19,15 @@
 #' mixed-effects models using lme4. *Journal of Statistical Software*,
 #' *67*(1), 1--48. \doi{10.18637/jss.v067.i01}
 #'
+#' Bürkner, P.-C. (2017). brms: An R package for Bayesian multilevel models
+#' using Stan. *Journal of Statistical Software*, *80*(1), 1--28.
+#' \doi{10.18637/jss.v080.i01}
+#'
 #' @seealso <https://zzg021.github.io/gtheorytools/>
 #'
 #' @importFrom methods new
-#' @importFrom stats as.formula formula model.frame optimHess sigma
+#' @importFrom stats as.formula cov formula gaussian median model.frame optimHess
+#'   quantile sd sigma
 #' @importFrom utils combn
 #' @keywords internal
 "_PACKAGE"

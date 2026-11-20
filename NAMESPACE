@@ -17,9 +17,14 @@ export(g_study_general)
 importFrom(methods,new)
 importFrom(stats,
   as.formula,
+  cov,
   formula,
+  gaussian,
+  median,
   model.frame,
   optimHess,
+  quantile,
+  sd,
   sigma
 )
 importFrom(utils,combn)
